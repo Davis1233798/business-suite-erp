@@ -1,0 +1,213 @@
+{
+  "erp_customers": [
+    {
+      "id": "erp_cust_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "code": "CUST-DEMO-01",
+      "name": "示範企業客戶 A（虛構）",
+      "contact_email": "procure@customer-a.example.test",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_fiscal_periods": [
+    {
+      "id": "erp_fp_202610_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "period_code": "2026-10",
+      "start_date": "2026-10-01",
+      "end_date": "2026-10-31",
+      "is_closed": 0,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_invoices": [
+    {
+      "id": "erp_inv_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "invoice_number": "INV-202610-001",
+      "invoice_type": "payable",
+      "partner_type": "supplier",
+      "partner_id": "erp_sup_01_org_go_fixture",
+      "total_amount": 1000,
+      "paid_amount": 400,
+      "status": "partially_paid",
+      "due_date": "2026-11-15",
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_item_costing": [
+    {
+      "id": "erp_cost_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "item_id": "erp_item_01_org_go_fixture",
+      "total_quantity": 20,
+      "total_cost": 3000,
+      "moving_average_cost": 150,
+      "updated_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_items": [
+    {
+      "id": "erp_item_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "sku": "SKU-SENS-01",
+      "name": "工業級溫濕度傳感器 (單件)",
+      "unit": "PCS",
+      "box_conversion_ratio": 1,
+      "category": "電子元件",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    },
+    {
+      "id": "erp_item_02_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "sku": "SKU-SENS-BOX10",
+      "name": "工業級溫濕度傳感器 (十入盒裝)",
+      "unit": "BOX",
+      "box_conversion_ratio": 10,
+      "category": "箱裝成品",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_journal_entries": [
+    {
+      "id": "erp_je_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "entry_number": "JE-202610-001",
+      "entry_date": "2026-10-15",
+      "description": "期初股本與銀行存款開帳",
+      "reference_doc": "INITIAL_CAPITAL",
+      "status": "posted",
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_journal_lines": [
+    {
+      "id": "erp_jel_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "journal_id": "erp_je_01_org_go_fixture",
+      "account_code": "1101",
+      "account_name": "銀行存款 (Bank Deposit)",
+      "debit_amount": 100000,
+      "credit_amount": 0,
+      "created_at": "2026-10-30 16:30:21"
+    },
+    {
+      "id": "erp_jel_02_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "journal_id": "erp_je_01_org_go_fixture",
+      "account_code": "3101",
+      "account_name": "普通股股本 (Common Stock)",
+      "debit_amount": 0,
+      "credit_amount": 100000,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_purchase_order_lines": [
+    {
+      "id": "erp_pol_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "po_id": "erp_po_01_org_go_fixture",
+      "item_id": "erp_item_01_org_go_fixture",
+      "quantity": 10,
+      "unit_price": 100,
+      "received_quantity": 10,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_purchase_orders": [
+    {
+      "id": "erp_po_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "po_number": "PO-202610-001",
+      "supplier_id": "erp_sup_01_org_go_fixture",
+      "status": "approved",
+      "total_amount": 1000,
+      "rejected_reason": null,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_sales_order_lines": [
+    {
+      "id": "erp_sol_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "so_id": "erp_so_01_org_go_fixture",
+      "item_id": "erp_item_01_org_go_fixture",
+      "quantity": 5,
+      "unit_price": 300,
+      "shipped_quantity": 0,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_sales_orders": [
+    {
+      "id": "erp_so_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "so_number": "SO-202610-001",
+      "customer_id": "erp_cust_01_org_go_fixture",
+      "quote_reference": "QT-2026-001",
+      "status": "confirmed",
+      "total_amount": 1500,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_stock_ledger": [
+    {
+      "id": "erp_stk_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "item_id": "erp_item_01_org_go_fixture",
+      "warehouse_id": "erp_wh_01_org_go_fixture",
+      "change_type": "purchase_receipt",
+      "quantity_change": 10,
+      "balance_after": 10,
+      "unit_cost": 100,
+      "total_value": 1000,
+      "reference_doc": "PO-202610-001",
+      "created_at": "2026-10-30 16:30:21"
+    },
+    {
+      "id": "erp_stk_02_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "item_id": "erp_item_01_org_go_fixture",
+      "warehouse_id": "erp_wh_01_org_go_fixture",
+      "change_type": "purchase_receipt",
+      "quantity_change": 10,
+      "balance_after": 20,
+      "unit_cost": 200,
+      "total_value": 3000,
+      "reference_doc": "PO-202610-002",
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_suppliers": [
+    {
+      "id": "erp_sup_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "code": "SUP-DEMO-01",
+      "name": "示範供應商 A（虛構）",
+      "contact_email": "sales@supplier-a.example.test",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ],
+  "erp_warehouses": [
+    {
+      "id": "erp_wh_01_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "code": "WH-TP",
+      "name": "台北總倉",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    },
+    {
+      "id": "erp_wh_02_org_go_fixture",
+      "organization_id": "org_go_fixture",
+      "code": "WH-TC",
+      "name": "台中轉運倉",
+      "is_active": 1,
+      "created_at": "2026-10-30 16:30:21"
+    }
+  ]
+}
