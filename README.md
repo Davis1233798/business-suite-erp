@@ -4,6 +4,12 @@
 
 本 repo 的獨立 GitHub 遠端為 [business-suite-erp](https://github.com/Davis1233798/business-suite-erp)；正式部署尚未驗證，原公開站台尚未切換。功能是展示與遷移原型，不代表完整商用系統。
 
+## Windows 桌面版
+
+Windows Electron 套件使用 `org.blockchen.forgeflow.erp` appId，並將 `userData` 與 Go repository 資料庫放在 `%APPDATA%\ForgeFlow ERP` 和其中的 `erp-repository.sqlite`。套件只使用本 repository 隨附的 ERP Go backend 與 web assets；不會讀取或搬移其他系統或舊共用目錄的資料。桌面身分與資料邊界見 [ERP_DESKTOP_IDENTITY.md](docs/engineering/ERP_DESKTOP_IDENTITY.md)。
+
+GitHub Actions 在 ERP 驗證後執行 Windows identity 檢查、desktop backend/assets 建置與未安裝套件封裝，並保存短期 CI artifact。CI artifact 不代表已簽章的安裝程式或正式發行。
+
 ## 本地執行與測試
 
 需要 Node.js 22.13 以上、npm 與 Go 1.26 以上。
