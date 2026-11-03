@@ -6,6 +6,33 @@ permissions:
   contents: read
   packages: write
 jobs:
+  windows-desktop:
+    needs: erp
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm run install:ci
+      - name: Check ERP desktop identity and data boundaries
+        run: node --test tests/desktop-identity.test.cjs
+      - name: Build Windows ERP desktop backend and assets
+        run: npm run desktop:prepare
+      - name: Package unpacked Windows ERP desktop app
+        run: npm run desktop:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forgeflow-erp-windows-${{ github.sha }}
+          path: outputs/desktop/win-unpacked/
+          if-no-files-found: error
+          retention-days: 7
+
   erp:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -19,6 +46,8 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - run: npm run install:ci
+      - name: Check release workflow build boundary
+        run: node --test tests/erp-workflow-contract.test.cjs
       - run: npx tsc --noEmit
       - run: npm test
       - run: go -C backend test -race -timeout=20m ./...
@@ -36,7 +65,33 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null
           test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:18095/mes/login)" = 404
-      - name: Publish ERP image on main
+  release:
+    needs: [erp, windows-desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run install:ci
+      - name: Verify main head before image publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha | grep -Fx "$GITHUB_SHA"
+      - name: Build ERP web assets for the isolated release workspace
+        run: npm run web:build
+      - name: Build ERP image after all platform checks
+        run: docker build -f infra/linux/Dockerfile.station -t erp-ci:${GITHUB_SHA} .
+      - name: Publish ERP image after all platform checks
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
