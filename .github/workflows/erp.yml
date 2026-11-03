@@ -1,0 +1,48 @@
+name: ERP validation and container publication
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  mes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm run install:ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: go -C backend test -race -timeout=20m ./...
+      - run: npm run web:build
+      - name: Build ERP image
+        run: docker build -f infra/linux/Dockerfile.station -t erp-ci:${GITHUB_SHA} .
+      - name: Smoke-test isolated ERP image
+        run: |
+          set -euo pipefail
+          docker run -d --name erp-ci -p 127.0.0.1:18095:8095 erp-ci:${GITHUB_SHA}
+          trap 'docker logs erp-ci; docker rm -f erp-ci' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:18095/mes/login)" = 404
+      - name: Publish ERP image on main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/business-suite-erp"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag erp-ci:${GITHUB_SHA} "$image:${GITHUB_SHA}"
+          docker push "$image:${GITHUB_SHA}"
