@@ -65,6 +65,29 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null
           test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:18095/mes/login)" = 404
+      - name: Install Chromium for real journal acceptance
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser journal posting against the Go image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name erp-browser -p 127.0.0.1:18095:8095 erp-ci:${GITHUB_SHA}
+          trap 'docker logs erp-browser; docker rm -f erp-browser' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:18095/api/health > /dev/null
+          npx playwright test --config playwright.erp.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: erp-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
   release:
     needs: [erp, windows-desktop]
     runs-on: ubuntu-latest

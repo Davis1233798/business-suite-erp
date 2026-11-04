@@ -11,3 +11,5 @@ CREATE TRIGGER IF NOT EXISTS erp_shipment_limit BEFORE UPDATE OF shipped_quantit
 CREATE TABLE IF NOT EXISTS demo_seed_states (organization_id TEXT PRIMARY KEY NOT NULL, ready_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 --> statement-breakpoint
 CREATE TRIGGER IF NOT EXISTS erp_journal_period_closed BEFORE INSERT ON erp_journal_entries WHEN EXISTS (SELECT 1 FROM erp_fiscal_periods WHERE organization_id=NEW.organization_id AND is_closed=1 AND start_date<=NEW.entry_date AND end_date>=NEW.entry_date) BEGIN SELECT RAISE(ABORT, 'Fiscal period is closed'); END;
+
+CREATE UNIQUE INDEX IF NOT EXISTS erp_journal_number_unique ON erp_journal_entries(organization_id, entry_number);
