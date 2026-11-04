@@ -153,3 +153,48 @@ func TestConcurrentPurchaseReceiptsCannotOverReceive(t *testing.T) {
 		t.Fatal(success, conflict)
 	}
 }
+
+func TestPurchaseBoxesAndForeignLines(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	_, supplier, item, warehouse := purchaseFixture(t, a, admin)
+	if _, e := a.db.Exec("UPDATE erp_items SET box_conversion_ratio=5 WHERE id=?", item); e != nil {
+		t.Fatal(e)
+	}
+	po := newPurchase(t, a, admin, supplier, item)
+	purchasePost(t, a, admin, map[string]any{"action": "approve", "poId": po}, 200)
+	var line string
+	a.db.QueryRow("SELECT id FROM erp_purchase_order_lines WHERE po_id=?", po).Scan(&line)
+	other := login(t, a, "admin@suite.test", token())
+	_, otherSupplier, otherItem, _ := purchaseFixture(t, a, other)
+	foreignPO := newPurchase(t, a, other, otherSupplier, otherItem)
+	var foreignLine string
+	a.db.QueryRow("SELECT id FROM erp_purchase_order_lines WHERE po_id=?", foreignPO).Scan(&foreignLine)
+	purchasePost(t, a, admin, map[string]any{"action": "receive", "poId": po, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": foreignLine, "quantity": 1}}}, 400)
+	purchasePost(t, a, admin, map[string]any{"action": "receive", "poId": po, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 1}, {"lineId": line, "quantity": 1}}}, 400)
+	purchasePost(t, a, admin, map[string]any{"action": "receive", "poId": po, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 3, "isBoxes": true}}}, 409)
+	purchasePost(t, a, admin, map[string]any{"action": "receive", "poId": po, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 2, "isBoxes": true}}}, 200)
+	var received int
+	a.db.QueryRow("SELECT received_quantity FROM erp_purchase_order_lines WHERE id=?", line).Scan(&received)
+	if received != 10 {
+		t.Fatal("box conversion not persisted", received)
+	}
+}
+func TestPurchaseRejectAndInvalidInput(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	_, supplier, item, _ := purchaseFixture(t, a, admin)
+	purchasePost(t, a, nil, map[string]any{"action": "create"}, 401)
+	for _, line := range []map[string]any{{"itemId": item, "quantity": 0, "unitPrice": 1}, {"itemId": item, "quantity": 1, "unitPrice": -1}, {"itemId": item, "quantity": 1.5, "unitPrice": 1}} {
+		purchasePost(t, a, admin, map[string]any{"action": "create", "supplierId": supplier, "lines": []map[string]any{line}}, 400)
+	}
+	po := newPurchase(t, a, admin, supplier, item)
+	purchasePost(t, a, admin, map[string]any{"action": "reject", "poId": po, "reason": " "}, 400)
+	purchasePost(t, a, admin, map[string]any{"action": "reject", "poId": po, "reason": "Budget approval required"}, 200)
+	purchasePost(t, a, admin, map[string]any{"action": "approve", "poId": po}, 409)
+	var reason, status string
+	a.db.QueryRow("SELECT status,rejected_reason FROM erp_purchase_orders WHERE id=?", po).Scan(&status, &reason)
+	if status != "rejected" || reason != "Budget approval required" {
+		t.Fatal("rejection not persisted", status, reason)
+	}
+}
