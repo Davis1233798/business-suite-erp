@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
@@ -185,6 +184,9 @@ func TestShipmentExtendedCostUpgradePreservesExistingRows(t *testing.T) {
 			hasColumn = true
 		}
 	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	rows.Close()
 	if hasColumn {
 		if _, err = db.Exec("ALTER TABLE erp_shipment_lines DROP COLUMN extended_cost"); err != nil {
@@ -208,8 +210,8 @@ func TestShipmentExtendedCostUpgradePreservesExistingRows(t *testing.T) {
 	if err = db.QueryRow("SELECT count(*) FROM erp_shipment_lines WHERE id='old-line'").Scan(&count); err != nil || count != 1 {
 		t.Fatal("legacy row changed", count, err)
 	}
-	if _, err = db.Exec("PRAGMA integrity_check"); err != nil {
-		t.Fatal(err)
+	var integrity string
+	if err = db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+		t.Fatal("migrated database integrity", integrity, err)
 	}
-	_ = sql.ErrNoRows
 }
