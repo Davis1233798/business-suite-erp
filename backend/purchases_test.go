@@ -79,10 +79,14 @@ func TestPurchaseApprovalReceiptReplayAndCosting(t *testing.T) {
 	var audits int
 	a.db.QueryRow("SELECT count(*) FROM audit_events WHERE organization_id=? AND entity_id=?", org, po).Scan(&audits)
 	var auditAfter string
- if err:=a.db.QueryRow("SELECT after_value FROM audit_events WHERE organization_id=? AND entity_id=? AND action='RECEIVE_PO' ORDER BY rowid DESC LIMIT 1",org,po).Scan(&auditAfter);err!=nil{t.Fatal(err)}
- var auditState map[string]string
- if err:=json.Unmarshal([]byte(auditAfter),&auditState);err!=nil||auditState["status"]!="received"||auditState["receiptId"]==""{t.Fatal("receipt audit must preserve structured state",auditAfter,err)}
- if audits != 4 {
+	if err := a.db.QueryRow("SELECT after_value FROM audit_events WHERE organization_id=? AND entity_id=? AND action='RECEIVE_PO' ORDER BY rowid DESC LIMIT 1", org, po).Scan(&auditAfter); err != nil {
+		t.Fatal(err)
+	}
+	var auditState map[string]string
+	if err := json.Unmarshal([]byte(auditAfter), &auditState); err != nil || auditState["status"] != "received" || auditState["receiptId"] == "" {
+		t.Fatal("receipt audit must preserve structured state", auditAfter, err)
+	}
+	if audits != 4 {
 		t.Fatal("missing lifecycle audit", audits)
 	}
 }

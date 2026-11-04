@@ -112,8 +112,16 @@ func (a *App) purchases(w http.ResponseWriter, r *http.Request, id *Identity, g 
 	}
 	ok(w, result)
 }
-func purchaseAudit(tx *sql.Tx, id *Identity, g *Grant, action, po, before, after, reason string) error {
-	_, e := tx.Exec("INSERT INTO audit_events(id,organization_id,actor_id,actor_role,action,entity_type,entity_id,before_value,after_value,reason) VALUES(?,?,?,?,?,'ERP_PO',?,?,?,?)", token(), id.OrganizationID, id.UserID, g.Role, action, po, before, after, reason)
+func purchaseAudit(tx *sql.Tx, id *Identity, g *Grant, action, po string, before, after any, reason string) error {
+	beforeJSON, e := json.Marshal(before)
+	if e != nil {
+		return e
+	}
+	afterJSON, e := json.Marshal(after)
+	if e != nil {
+		return e
+	}
+	_, e = tx.Exec("INSERT INTO audit_events(id,organization_id,actor_id,actor_role,action,entity_type,entity_id,before_value,after_value,reason) VALUES(?,?,?,?,?,'ERP_PO',?,?,?,?)", token(), id.OrganizationID, id.UserID, g.Role, action, po, string(beforeJSON), string(afterJSON), reason)
 	return e
 }
 func executePurchase(tx *sql.Tx, id *Identity, g *Grant, p purchaseInput) (map[string]any, error) {
@@ -158,7 +166,7 @@ func executePurchase(tx *sql.Tx, id *Identity, g *Grant, p purchaseInput) (map[s
 				return nil, e
 			}
 		}
-		if e := purchaseAudit(tx, id, g, "CREATE_PO", po, "", "draft", ""); e != nil {
+		if e := purchaseAudit(tx, id, g, "CREATE_PO", po, nil, map[string]string{"status": "draft"}, ""); e != nil {
 			return nil, e
 		}
 		return map[string]any{"id": po, "poNumber": number, "status": "draft", "totalAmount": total}, nil
@@ -192,7 +200,7 @@ func executePurchase(tx *sql.Tx, id *Identity, g *Grant, p purchaseInput) (map[s
 		if n != 1 {
 			return nil, purchaseFail(409, "Purchase state changed")
 		}
-		if e = purchaseAudit(tx, id, g, "DECIDE_PO", p.POID, status, next, p.Reason); e != nil {
+		if e = purchaseAudit(tx, id, g, "DECIDE_PO", p.POID, map[string]string{"status": status}, map[string]string{"status": next}, p.Reason); e != nil {
 			return nil, e
 		}
 		return map[string]any{"id": p.POID, "status": next}, nil
@@ -304,7 +312,7 @@ func executePurchase(tx *sql.Tx, id *Identity, g *Grant, p purchaseInput) (map[s
 	if _, e := tx.Exec("UPDATE erp_purchase_orders SET status=? WHERE id=? AND organization_id=?", next, p.POID, org); e != nil {
 		return nil, e
 	}
-	if e := purchaseAudit(tx, id, g, "RECEIVE_PO", p.POID, status, next+":"+receipt, ""); e != nil {
+	if e := purchaseAudit(tx, id, g, "RECEIVE_PO", p.POID, map[string]string{"status": status}, map[string]string{"status": next, "receiptId": receipt}, ""); e != nil {
 		return nil, e
 	}
 	return map[string]any{"id": receipt, "receiptNumber": number, "poId": p.POID, "status": next}, nil
