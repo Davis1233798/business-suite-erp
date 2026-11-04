@@ -12,7 +12,7 @@ func TestJournalPostingAuthorizationPersistenceIsolation(t *testing.T){
  a:=appForTest(t);space:=token();admin:=login(t,a,"admin@suite.test",space);org:=journalOrg(t,a,admin)
  for _,email:=range []string{"viewer@suite.test","front@suite.test"}{c:=login(t,a,email,space);if w:=request(a,"POST","/api/stations/erp/journal",journalInput(),c...);w.Code!=403{t.Fatalf("%s: %d %s",email,w.Code,w.Body)}}
  if w:=request(a,"POST","/api/stations/erp/journal",journalInput());w.Code!=401{t.Fatal(w.Code)}
- input:=journalInput();input["organizationId"]="attacker"
+ tampered:=journalInput();tampered["organizationId"]="attacker";if w:=request(a,"POST","/api/stations/erp/journal",tampered,admin...);w.Code!=400{t.Fatal("browser tenant selector accepted",w.Code)};input:=journalInput()
  operator:=login(t,a,"office@suite.test",space)
  w:=request(a,"POST","/api/stations/erp/journal",input,operator...);if w.Code!=200{t.Fatalf("post: %d %s",w.Code,w.Body)}
  var out struct{Data struct{ID string `json:"id"`} `json:"data"`};json.Unmarshal(w.Body.Bytes(),&out);if out.Data.ID==""{t.Fatal("missing persisted id")}
