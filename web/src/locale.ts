@@ -2,6 +2,21 @@ export type Language = 'en' | 'zh-TW';
 export function currentLanguage():Language { return localStorage.getItem('suite-language')==='zh-TW'?'zh-TW':'en'; }
 export function initializeLanguage() { document.documentElement.lang=currentLanguage(); }
 const traditionalChinese:Record<string,string> = {
+  "Post a journal entry": "建立總帳傳票",
+  "Amounts use integer minor currency units. Posted entries are retained in this workspace ledger.": "金額以整數最小貨幣單位輸入。過帳後的傳票將保存在此工作區的總帳。",
+  "Entry date": "過帳日期",
+  "Description": "摘要",
+  "Account code": "科目代碼",
+  "Account name": "科目名稱",
+  "Debit": "借方",
+  "Credit": "貸方",
+  "Add line": "新增明細",
+  "Posting…": "過帳中…",
+  "Post journal": "確認過帳",
+  "Balanced": "借貸平衡",
+  "Not balanced": "借貸不平衡",
+  "Posted": "已過帳",
+  "Journal posted. Refresh the page to reload ledger data.": "傳票已過帳，請重新整理頁面以載入最新總帳資料。",
   "Switch system": "切換系統",
   "Choose a workspace": "選擇工作區",
   "No records yet": "尚無資料",
