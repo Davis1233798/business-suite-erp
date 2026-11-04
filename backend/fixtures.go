@@ -45,5 +45,5 @@ func seedFixtures(tx *sql.Tx, org string) error {
 			}
 		}
 	}
-	return nil
+	return backfillShipmentCost(tx, org)
 }

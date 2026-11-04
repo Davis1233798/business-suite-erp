@@ -74,6 +74,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "No access to this workspace")
 		return
 	}
+	if action == "sales" && r.Method == http.MethodPost {
+		a.sales(w, r, id, g)
+		return
+	}
 	if action == "purchases" && r.Method == http.MethodPost {
 		a.purchases(w, r, id, g)
 		return
