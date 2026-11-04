@@ -1,0 +1,10 @@
+import {test,expect} from '@playwright/test';
+test('administrator creates, approves and receives a real purchase',async({page})=>{
+ await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill('admin@suite.test');await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/back/);
+ const panel=page.locator('section').filter({has:page.getByRole('heading',{name:'Purchase workflow',exact:true})});
+ await panel.getByLabel('Supplier',{exact:true}).selectOption({index:1});await panel.getByLabel('Purchase item 1',{exact:true}).selectOption({index:1});await panel.getByLabel('Order quantity 1',{exact:true}).fill('3');await panel.getByLabel('Unit price 1',{exact:true}).fill('120');
+ const created=page.waitForResponse(r=>r.url().endsWith('/api/stations/erp/purchases')&&r.request().method()==='POST');await panel.getByRole('button',{name:'Create draft',exact:true}).click();const payload=await(await created).json();expect(payload.success).toBe(true);const po=payload.data.id;
+ await expect(panel.getByLabel('Purchase order',{exact:true})).toHaveValue(po);await panel.getByRole('button',{name:'Approve order',exact:true}).click();await expect(panel.getByRole('button',{name:'Receive goods',exact:true})).toBeVisible();
+ await panel.getByLabel('Receipt quantity 1',{exact:true}).fill('3');await panel.getByRole('button',{name:'Receive goods',exact:true}).click();await expect(panel.getByText('received',{exact:true})).toBeVisible();
+ const result=await(await page.request.get('/api/stations/erp/data?view=back')).json();expect(result.data.purchaseOrders.find((r:{id:string})=>r.id===po).status).toBe('received');expect(result.data.receipts.filter((r:{poId:string})=>r.poId===po)).toHaveLength(1);await page.reload();await expect(page.getByText(po,{exact:true}).first()).toBeVisible();
+});
