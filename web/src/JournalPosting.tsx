@@ -1,8 +1,9 @@
+import {taipeiAccountingDate} from './accounting-date';
 import {useState,type FormEvent} from 'react';
 type Line={accountCode:string;accountName:string;debitAmount:number;creditAmount:number};
 const blank=():Line=>({accountCode:'',accountName:'',debitAmount:0,creditAmount:0});
 export function JournalPosting({onPosted}:{onPosted:()=>Promise<void>}){
- const [entryDate,setDate]=useState(new Date().toISOString().slice(0,10)),[description,setDescription]=useState(''),[lines,setLines]=useState<Line[]>([blank(),blank()]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState('');
+ const [entryDate,setDate]=useState(()=>taipeiAccountingDate()),[description,setDescription]=useState(''),[lines,setLines]=useState<Line[]>([blank(),blank()]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState('');
  const debit=lines.reduce((n,l)=>n+l.debitAmount,0),credit=lines.reduce((n,l)=>n+l.creditAmount,0);
  const update=(i:number,key:keyof Line,value:string|number)=>setLines(rows=>rows.map((l,n)=>n===i?{...l,[key]:value}:l));
  async function submit(event:FormEvent){event.preventDefault();if(busy)return;setError('');setSuccess('');setBusy(true);try{

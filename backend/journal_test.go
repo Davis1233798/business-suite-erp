@@ -139,8 +139,14 @@ func TestJournalClosedPeriodAndLateFailureAreAtomic(t *testing.T) {
 }
 
 func TestJournalNumberUniquenessWithinOrganization(t *testing.T) {
- a:=appForTest(t);admin:=login(t,a,"admin@suite.test",token());org:=journalOrg(t,a,admin)
- query:="INSERT INTO erp_journal_entries(id,organization_id,entry_number,entry_date,description) VALUES(?,?,?,'2027-03-04','Unique number')"
- if _,e:=a.db.Exec(query,token(),org,"JE-duplicate-test");e!=nil{t.Fatal(e)}
- if _,e:=a.db.Exec(query,token(),org,"JE-duplicate-test");e==nil{t.Fatal("duplicate journal number accepted")}
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	org := journalOrg(t, a, admin)
+	query := "INSERT INTO erp_journal_entries(id,organization_id,entry_number,entry_date,description) VALUES(?,?,?,'2027-03-04','Unique number')"
+	if _, e := a.db.Exec(query, token(), org, "JE-duplicate-test"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := a.db.Exec(query, token(), org, "JE-duplicate-test"); e == nil {
+		t.Fatal("duplicate journal number accepted")
+	}
 }
