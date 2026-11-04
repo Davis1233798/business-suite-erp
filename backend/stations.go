@@ -74,6 +74,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "No access to this workspace")
 		return
 	}
+	if action == "journal" && r.Method == http.MethodPost {
+		a.postJournal(w, r, id, g)
+		return
+	}
 	if action == "data" && r.Method == "GET" {
 		front := r.URL.Query().Get("view") == "front"
 		if !front && g.Scope != "back" {
