@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('closing print preview aborts its pending dataset request and allows a fresh reopen',async({page})=>{
- await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill('admin@suite.test');await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/back/);
+ await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill('admin@suite.test');await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/back/);await expect(page.locator('.dataset').first()).toBeVisible();
 
  let calls=0;let intercepted!:()=>void;const firstRequestIntercepted=new Promise<void>(resolve=>{intercepted=resolve});
  await page.route('**/api/stations/erp/data?view=back',async route=>{
