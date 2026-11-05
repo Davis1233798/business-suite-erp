@@ -42,3 +42,27 @@ test('workspace datasets paginate, search resets the page, and print line detail
  await expect(sheet).toContainText('line-075');
  await expect(sheet.getByRole('navigation',{name:'Table pagination'})).toHaveCount(0);
 });
+
+test('preview toggles preserve the current page and pagination controls localize after reload',async({page})=>{
+ await signIn(page);
+ let itemsPanel=page.locator('section.dataset').filter({has:page.getByRole('heading',{name:/Items/})});
+ let pager=itemsPanel.getByRole('navigation',{name:'Table pagination'});
+ await expect(itemsPanel.locator('tbody tr')).toHaveCount(50);
+ await pager.getByRole('button',{name:'Last page'}).click();
+ await expect(pager).toContainText('Page 10 of 10');
+
+ await page.getByRole('button',{name:'Preview front office'}).click();
+ await expect(page.getByRole('button',{name:'Close workspace preview'})).toBeVisible();
+ await expect(pager).toContainText('Page 10 of 10');
+ await page.getByRole('button',{name:'Close workspace preview'}).click();
+ await expect(pager).toContainText('Page 10 of 10');
+
+ await page.evaluate(()=>localStorage.setItem('suite-language','zh-TW'));
+ await page.reload();
+ await expect(page).toHaveURL(/\/erp\/back/);
+ itemsPanel=page.locator('section.dataset').filter({has:page.getByRole('heading',{name:/品項/})});
+ pager=itemsPanel.getByRole('navigation',{name:'表格分頁'});
+ await expect(itemsPanel.locator('tbody tr')).toHaveCount(50);
+ await expect(pager.getByRole('button',{name:'下一頁'})).toBeEnabled();
+ await expect(pager.getByRole('button',{name:'第一頁'})).toBeDisabled();
+});
