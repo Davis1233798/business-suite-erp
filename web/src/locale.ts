@@ -2,6 +2,9 @@ export type Language = 'en' | 'zh-TW';
 export function currentLanguage():Language { return localStorage.getItem('suite-language')==='zh-TW'?'zh-TW':'en'; }
 export function initializeLanguage() { document.documentElement.lang=currentLanguage(); }
 const traditionalChinese:Record<string,string> = {
+  "Shipments": "出貨單",
+  "Shipment lines": "出貨明細",
+  "Inventory costing": "庫存成本",
   "Post a journal entry": "建立總帳傳票",
   "Amounts use integer minor currency units. Posted entries are retained in this workspace ledger.": "金額以整數最小貨幣單位輸入。過帳後的傳票將保存在此工作區的總帳。",
   "Entry date": "過帳日期",
