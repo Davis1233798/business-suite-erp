@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -65,6 +66,47 @@ func createSales(t *testing.T, a *App, cookies []*http.Cookie, customer, item st
 		t.Fatal(err)
 	}
 	return
+}
+
+type salesState struct {
+	status                            string
+	shipped, balance                  int64
+	ledgerQuantity, ledgerValue       int64
+	costQuantity, cost, average       int64
+	orders, shipments, shipmentLines  int
+	ledgerRows, auditRows, replayRows int
+}
+
+func snapshotSalesState(t *testing.T, a *App, org, order, line, item, warehouse, requestID string) salesState {
+	t.Helper()
+	state := salesState{}
+	queries := []struct {
+		query string
+		args  []any
+		dest  any
+	}{
+		{"SELECT status FROM erp_sales_orders WHERE organization_id=? AND id=?", []any{org, order}, &state.status},
+		{"SELECT shipped_quantity FROM erp_sales_order_lines WHERE organization_id=? AND id=?", []any{org, line}, &state.shipped},
+		{"SELECT count(*) FROM erp_sales_orders WHERE organization_id=?", []any{org}, &state.orders},
+		{"SELECT count(*) FROM erp_shipments WHERE organization_id=?", []any{org}, &state.shipments},
+		{"SELECT count(*) FROM erp_shipment_lines WHERE organization_id=?", []any{org}, &state.shipmentLines},
+		{"SELECT count(*) FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=?", []any{org, item, warehouse}, &state.ledgerRows},
+		{"SELECT balance_after FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=? ORDER BY rowid DESC LIMIT 1", []any{org, item, warehouse}, &state.balance},
+		{"SELECT coalesce(sum(quantity_change),0),coalesce(sum(total_value),0) FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=?", []any{org, item, warehouse}, []any{&state.ledgerQuantity, &state.ledgerValue}},
+		{"SELECT total_quantity,total_cost,moving_average_cost FROM erp_item_costing WHERE organization_id=? AND item_id=?", []any{org, item}, []any{&state.costQuantity, &state.cost, &state.average}},
+		{"SELECT count(*) FROM audit_events WHERE organization_id=?", []any{org}, &state.auditRows},
+		{"SELECT count(*) FROM idempotency_keys WHERE organization_id=? AND key=?", []any{org, requestID}, &state.replayRows},
+	}
+	for _, check := range queries {
+		if values, ok := check.dest.([]any); ok {
+			if err := a.db.QueryRow(check.query, check.args...).Scan(values...); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := a.db.QueryRow(check.query, check.args...).Scan(check.dest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return state
 }
 
 func TestSalesPartialFullReplayAndExactCost(t *testing.T) {
@@ -161,6 +203,63 @@ func TestConcurrentSalesCannotOversell(t *testing.T) {
 	}
 }
 
+func TestSalesLateAuditFailureRollsBackShipmentAndReplay(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	org, customer, item, warehouse := shippingFixture(t, a, admin)
+	order, line := createSales(t, a, admin, customer, item)
+	salesPost(t, a, admin, map[string]any{"action": "confirm", "soId": order}, 200)
+	requestID := "late-audit-rollback-" + token()
+	before := snapshotSalesState(t, a, org, order, line, item, warehouse, requestID)
+	if _, err := a.db.Exec(`CREATE TRIGGER reject_sales_audit BEFORE INSERT ON audit_events
+		WHEN NEW.action='SHIP_SALES' BEGIN SELECT RAISE(ABORT, 'forced audit failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	salesPost(t, a, admin, map[string]any{
+		"action": "ship", "requestId": requestID, "soId": order, "warehouseId": warehouse,
+		"lines": []map[string]any{{"lineId": line, "quantity": 1}},
+	}, 500)
+	after := snapshotSalesState(t, a, org, order, line, item, warehouse, requestID)
+	if before != after {
+		t.Fatalf("late audit failure left sales changes: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestSalesRejectsForeignReferencesAndDuplicateShipmentLines(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	org, customer, item, warehouse := shippingFixture(t, a, admin)
+	foreignAdmin := login(t, a, "admin@suite.test", token())
+	_, foreignCustomer, foreignItem, foreignWarehouse := shippingFixture(t, a, foreignAdmin)
+	order, line := createSales(t, a, admin, customer, item)
+
+	requestID := "foreign-customer-" + token()
+	before := snapshotSalesState(t, a, org, order, line, item, warehouse, requestID)
+	salesPost(t, a, admin, map[string]any{
+		"action": "create", "requestId": requestID, "customerId": foreignCustomer,
+		"lines": []map[string]any{{"itemId": item, "quantity": 1, "unitPrice": 10}},
+	}, 400)
+	if after := snapshotSalesState(t, a, org, order, line, item, warehouse, requestID); before != after {
+		t.Fatalf("foreign customer changed local sales state: before=%+v after=%+v", before, after)
+	}
+
+	_, foreignLine := createSales(t, a, foreignAdmin, foreignCustomer, foreignItem)
+	salesPost(t, a, admin, map[string]any{"action": "confirm", "soId": order}, 200)
+	for name, shipment := range map[string]map[string]any{
+		"foreign warehouse": {"action": "ship", "soId": order, "warehouseId": foreignWarehouse, "lines": []map[string]any{{"lineId": line, "quantity": 1}}},
+		"foreign line":      {"action": "ship", "soId": order, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": foreignLine, "quantity": 1}}},
+		"duplicate line":    {"action": "ship", "soId": order, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 1}, {"lineId": line, "quantity": 1}}},
+	} {
+		requestID = name + "-" + token()
+		shipment["requestId"] = requestID
+		before = snapshotSalesState(t, a, org, order, line, item, warehouse, requestID)
+		salesPost(t, a, admin, shipment, 400)
+		if after := snapshotSalesState(t, a, org, order, line, item, warehouse, requestID); before != after {
+			t.Fatalf("%s rejection changed local sales state: before=%+v after=%+v", name, before, after)
+		}
+	}
+}
+
 func TestShipmentExtendedCostUpgradePreservesExistingRows(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-erp.sqlite")
 	db, err := openDB(path)
@@ -213,5 +312,60 @@ func TestShipmentExtendedCostUpgradePreservesExistingRows(t *testing.T) {
 	var integrity string
 	if err = db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
 		t.Fatal("migrated database integrity", integrity, err)
+	}
+}
+
+func TestShipmentCostUpgradeRefusesOverflowWithoutChangingLegacySchemaOrRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overflow-erp.sqlite")
+	db, err := openDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec("ALTER TABLE erp_shipment_lines DROP COLUMN extended_cost"); err != nil {
+		t.Fatal(err)
+	}
+	const quantity, unitCost int64 = 2, 9007199254740991
+	if _, err = db.Exec("INSERT INTO erp_shipment_lines(id,organization_id,shipment_id,item_id,quantity,unit_cost) VALUES('overflow-line','legacy-org','legacy-shipment','legacy-item',?,?)", quantity, unitCost); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = migrateShipmentCost(tx)
+	if err == nil || !strings.Contains(err.Error(), "migration refused") {
+		t.Fatalf("overflow migration error = %v", err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query("PRAGMA table_info(erp_shipment_lines)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasExtendedCost := false
+	for rows.Next() {
+		var ordinal, required, primary int
+		var name, kind string
+		var defaultValue any
+		if err = rows.Scan(&ordinal, &name, &kind, &required, &defaultValue, &primary); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		hasExtendedCost = hasExtendedCost || name == "extended_cost"
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		t.Fatal(err)
+	}
+	rows.Close()
+	if hasExtendedCost {
+		t.Fatal("failed migration changed the legacy schema")
+	}
+	var gotQuantity, gotCost int64
+	if err = db.QueryRow("SELECT quantity,unit_cost FROM erp_shipment_lines WHERE id='overflow-line'").Scan(&gotQuantity, &gotCost); err != nil || gotQuantity != quantity || gotCost != unitCost {
+		t.Fatalf("failed migration changed legacy shipment row: quantity=%d cost=%d err=%v", gotQuantity, gotCost, err)
 	}
 }
