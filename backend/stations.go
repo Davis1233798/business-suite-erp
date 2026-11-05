@@ -15,7 +15,7 @@ type Dataset struct {
 }
 
 var datasets = map[string][]Dataset{
-	"erp": {{"items", "erp_items", "Items", []string{"id", "sku", "name", "unit", "is_active"}}, {"warehouses", "erp_warehouses", "Warehouses", []string{"id", "name", "code"}}, {"stockLedger", "erp_stock_ledger", "Stock ledger", []string{"id", "item_id", "warehouse_id", "quantity_change", "created_at"}}, {"purchaseOrders", "erp_purchase_orders", "Purchase orders", nil}, {"purchaseLines", "erp_purchase_order_lines", "Purchase lines", nil}, {"salesOrders", "erp_sales_orders", "Sales orders", nil}, {"salesLines", "erp_sales_order_lines", "Sales lines", nil}, {"receipts", "erp_receipts", "Receipts", nil}, {"receiptLines", "erp_receipt_lines", "Receipt lines", nil}, {"invoices", "erp_invoices", "Receivables and payables", nil}, {"suppliers", "erp_suppliers", "Suppliers", nil}, {"customers", "erp_customers", "Customers", nil}, {"journalEntries", "erp_journal_entries", "Journal entries", nil}, {"journalLines", "erp_journal_lines", "Journal lines", nil}},
+	"erp": {{"items", "erp_items", "Items", []string{"id", "sku", "name", "unit", "is_active"}}, {"warehouses", "erp_warehouses", "Warehouses", []string{"id", "name", "code"}}, {"stockLedger", "erp_stock_ledger", "Stock ledger", []string{"id", "item_id", "warehouse_id", "quantity_change", "created_at"}}, {"purchaseOrders", "erp_purchase_orders", "Purchase orders", nil}, {"purchaseLines", "erp_purchase_order_lines", "Purchase lines", nil}, {"salesOrders", "erp_sales_orders", "Sales orders", nil}, {"salesLines", "erp_sales_order_lines", "Sales lines", nil}, {"shipments", "erp_shipments", "Shipments", nil}, {"shipmentLines", "erp_shipment_lines", "Shipment lines", nil}, {"itemCosting", "erp_item_costing", "Inventory costing", nil}, {"receipts", "erp_receipts", "Receipts", nil}, {"receiptLines", "erp_receipt_lines", "Receipt lines", nil}, {"invoices", "erp_invoices", "Receivables and payables", nil}, {"suppliers", "erp_suppliers", "Suppliers", nil}, {"customers", "erp_customers", "Customers", nil}, {"journalEntries", "erp_journal_entries", "Journal entries", nil}, {"journalLines", "erp_journal_lines", "Journal lines", nil}},
 }
 
 func camel(s string) string {
@@ -72,6 +72,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 	g := id.grant(site)
 	if g == nil {
 		fail(w, 403, "No access to this workspace")
+		return
+	}
+	if action == "sales" && r.Method == http.MethodPost {
+		a.sales(w, r, id, g)
 		return
 	}
 	if action == "purchases" && r.Method == http.MethodPost {
@@ -209,7 +213,7 @@ func (a *App) manageUser(w http.ResponseWriter, r *http.Request, id *Identity, s
 type PrintKind struct{ Site, Dataset, Title, Lines, ForeignKey string }
 
 var printKinds = map[string]PrintKind{
-	"erp-item-label": {"erp", "items", "Item label", "", ""}, "erp-purchase": {"erp", "purchaseOrders", "Purchase orders", "erp_purchase_order_lines", "po_id"}, "erp-sale": {"erp", "salesOrders", "Sales orders", "erp_sales_order_lines", "so_id"}, "erp-receipt": {"erp", "receipts", "Receipts", "erp_receipt_lines", "receipt_id"},
+	"erp-item-label": {"erp", "items", "Item label", "", ""}, "erp-purchase": {"erp", "purchaseOrders", "Purchase orders", "erp_purchase_order_lines", "po_id"}, "erp-sale": {"erp", "salesOrders", "Sales orders", "erp_sales_order_lines", "so_id"}, "erp-receipt": {"erp", "receipts", "Receipts", "erp_receipt_lines", "receipt_id"}, "erp-shipment": {"erp", "shipments", "Shipments", "erp_shipment_lines", "shipment_id"},
 }
 
 func (a *App) printData(w http.ResponseWriter, r *http.Request, id *Identity, site string) {

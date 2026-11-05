@@ -141,6 +141,9 @@ func openDB(file string) (*sql.DB, error) {
 	if _, e = tx.Exec("CREATE TABLE IF NOT EXISTS erp_repository_schema (version INTEGER NOT NULL); INSERT INTO erp_repository_schema(version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM erp_repository_schema)"); e != nil {
 		return nil, e
 	}
+	if e = migrateShipmentCost(tx); e != nil {
+		return nil, e
+	}
 	if e = tx.Commit(); e != nil {
 		return nil, e
 	}
