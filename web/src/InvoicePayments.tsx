@@ -18,7 +18,7 @@ export function InvoicePayments({data,onChanged}:{data:Record<string,Row[]>;onCh
   if(retry.current.signature!==signature)retry.current={signature,key:crypto.randomUUID()};
   try{
    const response=await fetch('/api/stations/erp/finance',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,idempotencyKey:retry.current.key})});
-   const body=await response.json();
+   const body=await response.json() as {success:boolean;error?:{message?:string}};
    if(!response.ok||!body.success)throw new Error(body.error?.message||`HTTP ${response.status}`);
    retry.current={signature:'',key:''};
    setMessage(tr(payload.action==='invoice'?'Internal invoice created':'Payment recorded'));
