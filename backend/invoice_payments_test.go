@@ -199,3 +199,74 @@ func TestBillingAuthorizationSourceCompletionAndAuditRollback(t *testing.T) {
 		t.Fatalf("late failure leaked invoices=%d retries=%d", invoices, retries)
 	}
 }
+
+func TestBillingReceivableRequiresCompleteShipment(t *testing.T) {
+	a := appForTest(t)
+	space := token()
+	admin := login(t, a, "admin@suite.test", space)
+	org, customer, item, warehouse := shippingFixture(t, a, admin)
+	order, line := createSales(t, a, admin, customer, item)
+	salesPost(t, a, admin, map[string]any{"action": "confirm", "soId": order}, 200)
+	billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "receivable", "orderId": order}, 409)
+	salesPost(t, a, admin, map[string]any{"action": "ship", "soId": order, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 1}}}, 200)
+	billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "receivable", "orderId": order}, 409)
+	salesPost(t, a, admin, map[string]any{"action": "ship", "soId": order, "warehouseId": warehouse, "lines": []map[string]any{{"lineId": line, "quantity": 2}}}, 200)
+	result := billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "receivable", "orderId": order}, 200)
+	invoice := result["invoiceId"].(string)
+	var kind, partnerType, partner string
+	var total int64
+	if err := a.db.QueryRow("SELECT invoice_type,partner_type,partner_id,total_amount FROM erp_invoices WHERE organization_id=? AND id=?", org, invoice).Scan(&kind, &partnerType, &partner, &total); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "receivable" || partnerType != "customer" || partner != customer || total != 900 {
+		t.Fatalf("incorrect receivable %s %s %s %d", kind, partnerType, partner, total)
+	}
+	billingPost(t, a, login(t, a, "admin@suite.test", token()), map[string]any{"action": "payment", "invoiceId": invoice, "amount": 1, "method": "cash"}, 404)
+	billingPost(t, a, login(t, a, "office@suite.test", space), map[string]any{"action": "payment", "invoiceId": invoice, "amount": 900, "method": "bank_transfer"}, 200)
+}
+
+func TestBillingPaymentLateFailureRollsBackBalanceRowsAuditAndRetry(t *testing.T) {
+	for _, stage := range []string{"audit", "retry"} {
+		t.Run(stage, func(t *testing.T) {
+			a := appForTest(t)
+			admin := login(t, a, "admin@suite.test", token())
+			org, po := billingPurchase(t, a, admin, true)
+			invoice := billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "payable", "orderId": po}, 200)["invoiceId"].(string)
+			var beforeAudit int
+			if err := a.db.QueryRow("SELECT count(*) FROM audit_events WHERE organization_id=?", org).Scan(&beforeAudit); err != nil {
+				t.Fatal(err)
+			}
+			table := "audit_events"
+			if stage == "retry" {
+				table = "idempotency_keys"
+			}
+			if _, err := a.db.Exec("CREATE TRIGGER billing_payment_failure BEFORE INSERT ON " + table + " BEGIN SELECT RAISE(ABORT,'late payment failure'); END"); err != nil {
+				t.Fatal(err)
+			}
+			key := token()
+			payload := map[string]any{"action": "payment", "invoiceId": invoice, "amount": 100, "method": "cash", "idempotencyKey": key}
+			billingPost(t, a, admin, payload, 503)
+			var paid, payments, audits, retries int
+			var status string
+			if err := a.db.QueryRow("SELECT paid_amount,status FROM erp_invoices WHERE id=?", invoice).Scan(&paid, &status); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.db.QueryRow("SELECT count(*) FROM erp_payments WHERE invoice_id=?", invoice).Scan(&payments); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.db.QueryRow("SELECT count(*) FROM audit_events WHERE organization_id=?", org).Scan(&audits); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.db.QueryRow("SELECT count(*) FROM idempotency_keys WHERE organization_id=? AND key=?", org, key).Scan(&retries); err != nil {
+				t.Fatal(err)
+			}
+			if paid != 0 || status != "unpaid" || payments != 0 || audits != beforeAudit || retries != 0 {
+				t.Fatalf("rollback paid=%d status=%s payments=%d audit=%d/%d retries=%d", paid, status, payments, audits, beforeAudit, retries)
+			}
+			if _, err := a.db.Exec("DROP TRIGGER billing_payment_failure"); err != nil {
+				t.Fatal(err)
+			}
+			billingPost(t, a, admin, payload, 200)
+		})
+	}
+}
