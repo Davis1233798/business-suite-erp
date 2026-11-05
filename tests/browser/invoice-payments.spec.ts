@@ -48,3 +48,32 @@ test('read-only accounts cannot see finance forms',async({page})=>{
  await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill('viewer@suite.test');await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/back/);
  await expect(page.getByRole('region',{name:'Invoices and payments',exact:true})).toHaveCount(0);
 });
+
+test('a lost payment response retries the committed intent without a duplicate posting',async({page})=>{
+ await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill('office@suite.test');await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/back/);
+ const before=(await(await page.request.get('/api/stations/erp/data?view=back')).json()).data;
+ const invoice=before.invoices.find((row:{totalAmount:number;paidAmount:number;status:string})=>row.totalAmount-row.paidAmount>=100&&(row.status==='unpaid'||row.status==='partially_paid'));
+ expect(invoice).toBeTruthy();
+ const intents:Record<string,unknown>[]=[];
+ await page.route('**/api/stations/erp/finance',async route=>{
+  intents.push(route.request().postDataJSON());
+  if(intents.length===1){
+   const committed=await route.fetch();expect(committed.status()).toBe(200);
+   await route.abort('failed');
+  }else await route.continue();
+ });
+ const panel=page.getByRole('region',{name:'Invoices and payments',exact:true});
+ await panel.getByLabel('Open invoice',{exact:true}).selectOption(invoice.id);
+ await panel.getByLabel('Payment amount',{exact:true}).fill('100');
+ await panel.getByRole('button',{name:'Record payment',exact:true}).click();
+ await expect(panel.getByRole('alert')).toBeVisible();
+ await expect(panel.getByLabel('Open invoice',{exact:true})).toHaveValue(invoice.id);
+ await expect(panel.getByLabel('Payment amount',{exact:true})).toHaveValue('100');
+ await panel.getByRole('button',{name:'Record payment',exact:true}).click();
+ await expect(panel.getByRole('status')).toContainText('Payment recorded');
+ expect(intents).toHaveLength(2);expect(intents[1]).toEqual(intents[0]);
+ const after=(await(await page.request.get('/api/stations/erp/data?view=back')).json()).data;
+ expect(after.invoices.find((row:{id:string})=>row.id===invoice.id).paidAmount).toBe(invoice.paidAmount+100);
+ const count=(data:{payments:{invoiceId:string}[]})=>data.payments.filter(row=>row.invoiceId===invoice.id).length;
+ expect(count(after)).toBe(count(before)+1);
+});
