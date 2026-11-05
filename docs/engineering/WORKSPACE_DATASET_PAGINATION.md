@@ -4,6 +4,6 @@ Only workspace dataset tables use client-side pagination. They show 50 rows per 
 
 PrintCenter tables remain complete and unpaginated, including document line details. Summary metrics and compact tables keep their existing behavior. Pagination changes do not own or clear form drafts, auth state, or the underlying dataset.
 
-The Playwright fixture covers 500 rows across first, next, and last pages, search while on the last page, a 390px viewport, and a 75-line print document with no pagination. It makes no business API writes.
+The Playwright fixture covers 500 rows across first, next, and last pages, search while on the last page, a 390px viewport, and a 675-line print document with no pagination. It makes no business API writes.
 
 TanStack Table v9 uses `useTable`, `tableFeatures`, `rowPaginationFeature`, and `createPaginatedRowModel` for this client-side table. See the [official React pagination guide](https://tanstack.com/table/latest/docs/framework/react/guide/pagination) and [pagination example](https://tanstack.com/table/latest/docs/framework/react/examples/pagination).

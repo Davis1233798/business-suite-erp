@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 const items=Array.from({length:500},(_,index)=>({id:`item-${String(index+1).padStart(3,'0')}`,sku:`SKU-${index+1}`,name:`Fixture item ${String(index+1).padStart(3,'0')}`,unit:'each',isActive:true}));
-const printLines=Array.from({length:75},(_,index)=>({id:`line-${String(index+1).padStart(3,'0')}`,lineNumber:index+1,description:`Print line ${index+1}`,quantity:1}));
+const printLines=Array.from({length:675},(_,index)=>({id:`line-${String(index+1).padStart(3,'0')}`,lineNumber:index+1,description:`Print line ${index+1}`,quantity:1}));
 const data={items,warehouses:[{id:'warehouse-1',name:'Fixture warehouse',code:'FIX'}],stockLedger:[],purchaseOrders:[{id:'po-fixture',poNumber:'PO-FIXTURE-1',status:'approved'}],purchaseLines:[],salesOrders:[],salesLines:[],receipts:[],receiptLines:[],invoices:[],suppliers:[{id:'supplier-1',name:'Fixture supplier',isActive:true}],customers:[],journalEntries:[],journalLines:[]};
 
 async function signIn(page:import('@playwright/test').Page){
@@ -38,8 +38,8 @@ test('workspace datasets paginate, search resets the page, and print line detail
  await print.getByLabel('Document or product').selectOption('po-fixture');
  await print.getByRole('button',{name:'Generate preview'}).click();
  const sheet=page.locator('.print-sheet');
- await expect(sheet.locator('tbody tr')).toHaveCount(75);
- await expect(sheet).toContainText('line-075');
+ await expect(sheet.locator('tbody tr')).toHaveCount(675);
+ await expect(sheet).toContainText('line-675');
  await expect(sheet.getByRole('navigation',{name:'Table pagination'})).toHaveCount(0);
 });
 
