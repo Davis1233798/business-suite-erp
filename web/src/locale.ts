@@ -2,6 +2,25 @@ export type Language = 'en' | 'zh-TW';
 export function currentLanguage():Language { return localStorage.getItem('suite-language')==='zh-TW'?'zh-TW':'en'; }
 export function initializeLanguage() { document.documentElement.lang=currentLanguage(); }
 const traditionalChinese:Record<string,string> = {
+  "Invoices and payments": "應收應付與核銷",
+  "Internal ledger records only; no tax invoice or bank transfer is issued.": "僅記錄內部帳務，不開立稅務發票或執行銀行轉帳。",
+  "Invoice type": "帳單類型",
+  "Accounts payable": "應付帳款",
+  "Accounts receivable": "應收帳款",
+  "Completed source order": "已完成來源訂單",
+  "Due date": "到期日",
+  "Create internal invoice": "建立內部帳單",
+  "Open invoice": "未結清帳單",
+  "Payment amount": "核銷金額",
+  "Payment method": "付款方式",
+  "Bank transfer": "銀行轉帳",
+  "Cash": "現金",
+  "Record payment": "記錄核銷",
+  "Internal invoice created": "內部帳單已建立",
+  "Payment recorded": "核銷已記錄",
+  "Payments": "核銷紀錄",
+  "Saved, but the display could not be refreshed. Reload before submitting another operation.": "已儲存，但畫面無法重新整理。請重新載入後再提交其他操作。",
+
   "Shipments": "出貨單",
   "Shipment lines": "出貨明細",
   "Inventory costing": "庫存成本",
