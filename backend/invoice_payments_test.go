@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 	"testing"
 )
 
@@ -22,6 +23,89 @@ func billingPost(t *testing.T, a *App, cookies []*http.Cookie, payload map[strin
 		t.Fatal(err)
 	}
 	return result.Data
+}
+
+func TestBillingConcurrentInvoiceAndPaymentNeverDuplicateOrOverpay(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	org, po := billingPurchase(t, a, admin, true)
+	var wg sync.WaitGroup
+	responses := make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			responses <- request(a, "POST", "/api/stations/erp/finance", map[string]any{"action": "invoice", "invoiceKind": "payable", "orderId": po, "idempotencyKey": token()}, admin...).Code
+		}()
+	}
+	wg.Wait()
+	close(responses)
+	success, conflicts := 0, 0
+	for code := range responses {
+		if code == 200 {
+			success++
+		} else if code == 409 {
+			conflicts++
+		} else {
+			t.Fatalf("unexpected invoice race status %d", code)
+		}
+	}
+	if success != 1 || conflicts != 7 {
+		t.Fatalf("invoice success=%d conflicts=%d", success, conflicts)
+	}
+	var invoice string
+	if err := a.db.QueryRow("SELECT id FROM erp_invoices WHERE organization_id=? AND id LIKE 'invoice_%'", org).Scan(&invoice); err != nil {
+		t.Fatal(err)
+	}
+	payments := make(chan int, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			payments <- request(a, "POST", "/api/stations/erp/finance", map[string]any{"action": "payment", "invoiceId": invoice, "amount": 800, "method": "cash", "idempotencyKey": token()}, admin...).Code
+		}()
+	}
+	wg.Wait()
+	close(payments)
+	success, conflicts = 0, 0
+	for code := range payments {
+		if code == 200 {
+			success++
+		} else if code == 409 {
+			conflicts++
+		} else {
+			t.Fatalf("unexpected payment race status %d", code)
+		}
+	}
+	var paid, count int
+	if err := a.db.QueryRow("SELECT paid_amount FROM erp_invoices WHERE id=?", invoice).Scan(&paid); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.db.QueryRow("SELECT count(*) FROM erp_payments WHERE invoice_id=?", invoice).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if success != 1 || conflicts != 1 || paid != 800 || count != 1 {
+		t.Fatalf("payment success=%d conflicts=%d paid=%d rows=%d", success, conflicts, paid, count)
+	}
+}
+
+func TestBillingSourceIntegrityDateAndActorBoundRetry(t *testing.T) {
+	a := appForTest(t)
+	space := token()
+	admin := login(t, a, "admin@suite.test", space)
+	org, po := billingPurchase(t, a, admin, true)
+	billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "payable", "orderId": po, "dueDate": "2035-02-30"}, 400)
+	if _, err := a.db.Exec("UPDATE erp_purchase_orders SET total_amount=total_amount+1 WHERE organization_id=? AND id=?", org, po); err != nil {
+		t.Fatal(err)
+	}
+	billingPost(t, a, admin, map[string]any{"action": "invoice", "invoiceKind": "payable", "orderId": po}, 409)
+	if _, err := a.db.Exec("UPDATE erp_purchase_orders SET total_amount=total_amount-1 WHERE organization_id=? AND id=?", org, po); err != nil {
+		t.Fatal(err)
+	}
+	key := token()
+	payload := map[string]any{"action": "invoice", "invoiceKind": "payable", "orderId": po, "idempotencyKey": key}
+	billingPost(t, a, admin, payload, 200)
+	billingPost(t, a, login(t, a, "office@suite.test", space), payload, 409)
 }
 
 func billingPurchase(t *testing.T, a *App, admin []*http.Cookie, receive bool) (org, po string) {
