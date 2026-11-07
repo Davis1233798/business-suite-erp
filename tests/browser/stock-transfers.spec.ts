@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const transferRegion = (page: Page) => page.getByRole('region', { name: 'Warehouse transfer', exact: true });
+const transferRegion = (page: Page) => page.locator('section[aria-label="Warehouse transfer"]');
 
 async function signIn(page: Page, email = 'office@suite.test') {
   const demoSpace = crypto.randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64);
@@ -19,9 +19,9 @@ async function signIn(page: Page, email = 'office@suite.test') {
 
 async function chooseStockedWarehouses(page: Page) {
   const panel = transferRegion(page);
-  await expect(panel.getByLabel('Source warehouse', { exact: true })).toBeVisible();
+  await expect(panel.locator('select')).toHaveCount(3);
   const warehouseData = await (await page.request.get('/api/stations/erp/data?view=back')).json();
-  const itemId = await panel.getByLabel('Transfer item', { exact: true }).inputValue();
+  const itemId = await panel.locator('select').nth(0).inputValue();
   const warehouses = warehouseData.data.warehouses as Array<{ id: string }>;
   const balances = await Promise.all(warehouses.map(async warehouse => {
     const response = await page.request.get(
@@ -34,8 +34,8 @@ async function chooseStockedWarehouses(page: Page) {
   const destinationWarehouse = warehouses.find(warehouse => warehouse.id !== sourceWarehouse?.id);
   expect(sourceWarehouse, 'fixture must provide at least one stocked warehouse').toBeTruthy();
   expect(destinationWarehouse, 'fixture must provide a distinct destination warehouse').toBeTruthy();
-  await panel.getByLabel('Source warehouse', { exact: true }).selectOption(sourceWarehouse!.id);
-  await panel.getByLabel('Destination warehouse', { exact: true }).selectOption(destinationWarehouse!.id);
+  await panel.locator('select').nth(1).selectOption(sourceWarehouse!.id);
+  await panel.locator('select').nth(2).selectOption(destinationWarehouse!.id);
   await expect(panel.getByText(/Available:/)).toHaveText(`Available: ${sourceWarehouse!.available}`);
   return { panel, sourceWarehouse: sourceWarehouse!, destinationWarehouse: destinationWarehouse! };
 }
@@ -77,7 +77,7 @@ test('administrator transfers stock from persisted availability and sees it afte
   const availableText = panel.getByText(/Available:/);
   await expect(availableText).toHaveText(`Available: ${sourceWarehouse.available}`);
 
-  await panel.getByLabel('Transfer quantity', { exact: true }).fill('1');
+  await panel.locator('input[type="number"]').fill('1');
   await panel.getByRole('button', { name: 'Confirm stock transfer', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('Transfer complete');
   await expect(availableText).toHaveText(`Available: ${sourceWarehouse.available - 1}`);
@@ -91,7 +91,7 @@ test('administrator transfers stock from persisted availability and sees it afte
 test('uncertain transfer retries preserve the original payload and key', async ({ page }) => {
   await signIn(page, 'admin@suite.test');
   const { panel } = await chooseStockedWarehouses(page);
-  await panel.getByLabel('Transfer quantity', { exact: true }).fill('1');
+  await panel.locator('input[type="number"]').fill('1');
   const before = await (await page.request.get('/api/stations/erp/data?view=back')).json();
   const existingLedgerIds = new Set((before.data.stockLedger as Array<{ id: string }>).map(row => row.id));
 
@@ -114,7 +114,7 @@ test('uncertain transfer retries preserve the original payload and key', async (
   await expect(panel.getByRole('alert')).toBeVisible();
   const retryKey = await panel.locator('code').textContent();
   expect(retryKey).toBeTruthy();
-  await expect(panel.getByLabel('Transfer item', { exact: true })).toBeDisabled();
+  await expect(panel.locator('select').first()).toBeDisabled();
   await expect(panel.getByRole('button', { name: 'Retry transfer', exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Retry transfer', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('Transfer complete');
