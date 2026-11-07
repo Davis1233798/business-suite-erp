@@ -36,6 +36,7 @@ async function chooseStockedWarehouses(page: Page) {
   expect(destinationWarehouse, 'fixture must provide a distinct destination warehouse').toBeTruthy();
   await panel.getByLabel('Source warehouse', { exact: true }).selectOption(sourceWarehouse!.id);
   await panel.getByLabel('Destination warehouse', { exact: true }).selectOption(destinationWarehouse!.id);
+  await expect(panel.getByText(/Available:/)).toHaveText(`Available: ${sourceWarehouse!.available}`);
   return { panel, sourceWarehouse: sourceWarehouse!, destinationWarehouse: destinationWarehouse! };
 }
 
@@ -74,12 +75,12 @@ test('administrator transfers stock from persisted availability and sees it afte
   await receiveStockThroughPurchaseWorkflow(page);
   const { panel, sourceWarehouse } = await chooseStockedWarehouses(page);
   const availableText = panel.getByText(/Available:/);
-  await expect(availableText).toContainText(String(sourceWarehouse.available));
+  await expect(availableText).toHaveText(`Available: ${sourceWarehouse.available}`);
 
   await panel.getByLabel('Transfer quantity', { exact: true }).fill('1');
   await panel.getByRole('button', { name: 'Confirm stock transfer', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('Transfer complete');
-  await expect(availableText).toContainText(String(sourceWarehouse.available - 1));
+  await expect(availableText).toHaveText(`Available: ${sourceWarehouse.available - 1}`);
 
   const ledger = await (await page.request.get('/api/stations/erp/data?view=back')).json();
   expect(ledger.data.stockLedger.some((row: { changeType: string }) => row.changeType === 'transfer_out')).toBeTruthy();
