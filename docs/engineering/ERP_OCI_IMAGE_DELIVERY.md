@@ -77,3 +77,15 @@ return 401 for anonymous ERP data and 404 for a foreign workspace. A failed
 rehearsal removes its temporary container and volume. The activation step
 will take a separate final snapshot after writers are stopped so rehearsal
 never loses writes made while the active container was serving traffic.
+
+## Private endpoint activation
+
+After rehearsal, the release helper stops the managed ERP container before
+copying its final SQLite state into a new labelled release volume. It retains
+the previous container and volume as the rollback pair. The new container
+binds 127.0.0.1:18096, and is accepted only after revision and route checks
+pass. On command or health failure, the helper removes the failed candidate
+and restores the previous container name and listener. The remote test
+forces a failed revision check at the private endpoint, then verifies the
+previous purchase and retry result before accepting a successful replacement.
+Release volumes retained for rollback need an operator retention policy.
