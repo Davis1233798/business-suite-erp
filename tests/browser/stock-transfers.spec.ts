@@ -138,6 +138,79 @@ test('uncertain transfer retries preserve the original payload and key', async (
   expect(transferRows[0].quantityChange + transferRows[1].quantityChange).toBe(0);
 });
 
+test('a committed transfer behind a synthetic 502 retries with the same key and conserves the ledger', async ({ page }) => {
+  await signIn(page, 'admin@suite.test');
+  const { panel } = await chooseStockedWarehouses(page);
+  await panel.locator('input[type="number"]').fill('1');
+  const before = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const existingLedgerIds = new Set((before.data.stockLedger as Array<{ id: string }>).map(row => row.id));
+
+  let maskCommittedResponse = true;
+  let firstPayload: Record<string, unknown> | undefined;
+  let postCount = 0;
+  await page.route('**/api/stations/erp/inventory', async route => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+
+    postCount += 1;
+    const payload = route.request().postDataJSON() as Record<string, unknown>;
+    if (maskCommittedResponse) {
+      maskCommittedResponse = false;
+      firstPayload = payload;
+      const committedResponse = await route.fetch();
+      expect(committedResponse.ok()).toBeTruthy();
+      expect((await committedResponse.json()).success).toBeTruthy();
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: { message: 'Synthetic gateway timeout' } }),
+      });
+      return;
+    }
+
+    expect(payload).toEqual(firstPayload);
+    await route.continue();
+  });
+
+  await panel.getByRole('button', { name: 'Confirm stock transfer', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('Synthetic gateway timeout');
+  const committedLedger = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const committedRows = (committedLedger.data.stockLedger as Array<{
+    id: string;
+    changeType: string;
+    quantityChange: number;
+    totalValue: number;
+  }>).filter(row => !existingLedgerIds.has(row.id) && row.changeType.startsWith('transfer_'));
+  expect(committedRows).toHaveLength(2);
+  expect(committedRows[0].quantityChange + committedRows[1].quantityChange).toBe(0);
+  expect(committedRows[0].totalValue + committedRows[1].totalValue).toBe(0);
+
+  const retryKey = await panel.locator('code').textContent();
+  expect(retryKey).toBe(firstPayload?.requestId);
+  await expect(panel.locator('select').first()).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Retry transfer', exact: true })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Retry transfer', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Transfer complete');
+  expect(postCount).toBe(2);
+
+  const ledger = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const transferRows = (ledger.data.stockLedger as Array<{
+    id: string;
+    changeType: string;
+    quantityChange: number;
+    totalValue: number;
+    referenceDoc: string;
+  }>).filter(row => !existingLedgerIds.has(row.id) && row.changeType.startsWith('transfer_'));
+  expect(transferRows).toHaveLength(2);
+  expect(transferRows.map(row => row.changeType).sort()).toEqual(['transfer_in', 'transfer_out']);
+  expect(transferRows[0].referenceDoc).toBe(transferRows[1].referenceDoc);
+  expect(transferRows[0].quantityChange + transferRows[1].quantityChange).toBe(0);
+  expect(transferRows[0].totalValue + transferRows[1].totalValue).toBe(0);
+});
+
 test('transfer form stays usable on mobile and localizes to Traditional Chinese', async ({ page }) => {
   await signIn(page, 'admin@suite.test');
   await page.setViewportSize({ width: 390, height: 844 });

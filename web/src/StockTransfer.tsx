@@ -36,6 +36,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [refreshWarning, setRefreshWarning] = useState('');
 
   const items = (data.items || []).filter(row => row.isActive);
   const warehouses = data.warehouses || [];
@@ -76,6 +77,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
     setBusy(true);
     setError('');
     setMessage('');
+    setRefreshWarning('');
 
     const currentIntent = locked && intent
       ? intent
@@ -96,9 +98,17 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'transfer', ...currentIntent }),
       });
-      const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> = await response.json();
-      if (!response.ok || !result.success) {
-        throw new DefinitiveTransferError(result.error?.message || 'Transfer failed');
+      if (response.status >= 400 && response.status < 500) {
+        const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined =
+          await response.json().catch(() => undefined);
+        throw new DefinitiveTransferError(result?.error?.message || 'Transfer failed');
+      }
+      const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined =
+        await response.json().catch(() => undefined);
+      if (response.status >= 500 || !response.ok || !result?.success) {
+        throw new Error(
+          result?.error?.message || 'Transfer response is uncertain. Retry the same request.',
+        );
       }
 
       setMessage(
@@ -109,7 +119,15 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
       setIntentLocked(false);
       setAvailable(null);
       setAvailabilityRefresh(value => value + 1);
-      await onChanged();
+      try {
+        await onChanged();
+      } catch (cause) {
+        const detail = (cause as Error).message;
+        setRefreshWarning(
+          `${tr('The transfer was saved, but the inventory could not be refreshed. Reload the page to see current stock.')}` +
+          (detail ? ` ${detail}` : ''),
+        );
+      }
     } catch (cause) {
       setError((cause as Error).message);
       if (cause instanceof DefinitiveTransferError) setIntentLocked(false);
@@ -211,6 +229,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
       )}
       {error && <p role="alert" className="error">{error}</p>}
       {message && <p role="status">{message}</p>}
+      {refreshWarning && <p role="status" className="error">{refreshWarning}</p>}
     </section>
   );
 }

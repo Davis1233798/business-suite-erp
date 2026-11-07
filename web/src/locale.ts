@@ -13,6 +13,7 @@ const traditionalChinese:Record<string,string> = {
   "Confirm stock transfer": "確認庫存調撥",
   "Transferring…": "調撥中…",
   "Transfer complete": "調撥完成",
+  "The transfer was saved, but the inventory could not be refreshed. Reload the page to see current stock.": "調撥已儲存，但無法更新庫存。請重新載入頁面查看目前庫存。",
   "Source available": "來源剩餘",
   "Destination balance": "目的庫存",
   "Retry key retained": "重試識別碼已保留",
