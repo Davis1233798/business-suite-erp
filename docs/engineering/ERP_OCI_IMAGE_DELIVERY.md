@@ -69,3 +69,11 @@ replace existing files. A candidate can write to a copy in a separate volume
 without changing the active database. CI exercises a real purchase and
 retry through the restored copy before using this command in the deployment
 gateway.
+
+Candidate rehearsal uses a fresh, labelled Docker volume and a temporary
+loopback port. The active container continues serving on its current port.
+The candidate must report the requested revision, serve the ERP login,
+return 401 for anonymous ERP data and 404 for a foreign workspace. A failed
+rehearsal removes its temporary container and volume. The activation step
+will take a separate final snapshot after writers are stopped so rehearsal
+never loses writes made while the active container was serving traffic.
