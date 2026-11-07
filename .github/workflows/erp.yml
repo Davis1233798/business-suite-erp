@@ -110,7 +110,7 @@ jobs:
           mes_fixture="$RUNNER_TEMP/mes-template-fixture"
           git init "$mes_fixture"
           git -C "$mes_fixture" remote add origin https://github.com/Davis1233798/business-suite-mes.git
-          git -C "$mes_fixture" fetch --depth=1 origin 2732a31ddc6c87d865da6bf9696051135218781
+          git -C "$mes_fixture" fetch --depth=1 origin 2732a31ddc6c87d865da6bf9696051135218781a
           git -C "$mes_fixture" checkout --detach FETCH_HEAD
           sudo install -d -o root -g root -m 0755 /usr/local/libexec/mes-rootless
           sudo install -o root -g root -m 0755 "$mes_fixture/infra/linux/rootless-vendor/dockerd-rootless.sh" /usr/local/libexec/mes-rootless/dockerd-rootless.sh

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const workflow = fs.readFileSync('.github/workflows/erp.yml', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/erp.yml', 'utf8').replace(/\r\n/g, '\n');
 const erpJob = workflow.split('\n  erp:\n')[1].split('\n  release:\n')[0];
 const hostJob = workflow.split('\n  rootless-host:\n')[1].split('\n  release:\n')[0];
 const releaseJob = workflow.split('\n  release:\n')[1].split('\n  deploy:\n')[0];
@@ -17,7 +17,7 @@ test('ERP image publication waits for ERP and Windows desktop validation', () =>
 test('ERP rootless host acceptance is isolated to an ephemeral ARM runner', () => {
   assert.match(hostJob, /^    runs-on: ubuntu-24\.04-arm$/m);
   assert.match(hostJob, /ssh-keygen -q -t ed25519 -N '' -f "\$RUNNER_TEMP\/erp-fixture-key"/);
-  assert.match(hostJob, /2732a31ddc6c87d865da6bf9696051135218781/);
+  assert.match(hostJob, /2732a31ddc6c87d865da6bf9696051135218781a/);
   assert.match(hostJob, /provision-erp-rootless-host\.sh --apply --deploy-public-key-file/);
   assert.match(hostJob, /test "\$\(systemctl is-active docker\.service\)" = active/);
   assert.doesNotMatch(hostJob, /secrets\.|ERP_DEPLOY_TARGET|gh api .*erp-production/);
