@@ -90,7 +90,16 @@ jobs:
           retention-days: 7
   release:
     needs: [erp, windows-desktop]
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+            suffix: ''
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            suffix: '-arm64'
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -103,6 +112,14 @@ jobs:
         with:
           node-version: 24
       - run: npm run install:ci
+      - name: Build ERP web assets for the isolated release workspace
+        run: npm run web:build
+      - name: Build ERP image after all platform checks
+        run: docker build -f infra/linux/Dockerfile.station --build-arg SUITE_RELEASE_SHA="${GITHUB_SHA}" -t erp-ci:${GITHUB_SHA} .
+      - name: Verify ERP release image and revision
+        env:
+          IMAGE_ARCHITECTURE: ${{ matrix.architecture }}
+        run: bash infra/linux/smoke-erp-release-image.sh "erp-ci:${GITHUB_SHA}" "$IMAGE_ARCHITECTURE" "$GITHUB_SHA"
       - name: Verify main head before image publication
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -110,17 +127,15 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha | grep -Fx "$GITHUB_SHA"
-      - name: Build ERP web assets for the isolated release workspace
-        run: npm run web:build
-      - name: Build ERP image after all platform checks
-        run: docker build -f infra/linux/Dockerfile.station -t erp-ci:${GITHUB_SHA} .
       - name: Publish ERP image after all platform checks
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG_SUFFIX: ${{ matrix.suffix }}
         run: |
           set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/business-suite-erp-station"
+          tag="${GITHUB_SHA}${IMAGE_TAG_SUFFIX}"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker tag erp-ci:${GITHUB_SHA} "$image:${GITHUB_SHA}"
-          docker push "$image:${GITHUB_SHA}"
+          docker tag erp-ci:${GITHUB_SHA} "$image:$tag"
+          docker push "$image:$tag"

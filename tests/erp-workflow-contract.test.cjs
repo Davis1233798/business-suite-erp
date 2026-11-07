@@ -27,5 +27,6 @@ test('only a main push publishes the ERP image', () => {
 
   assert.ok(publicationStep);
   assert.match(publicationStep, /^        if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'$/m);
-  assert.match(publicationStep, /docker push "\$image:\$\{GITHUB_SHA\}"/);
+  assert.match(publicationStep, /tag="\$\{GITHUB_SHA\}\$\{IMAGE_TAG_SUFFIX\}"/);
+  assert.match(publicationStep, /docker push "\$image:\$tag"/);
 });

@@ -48,6 +48,8 @@ const cookieName = "suite_session"
 const demoCookie = "suite_demo_space"
 const testPassword = "SuiteDemo!2026"
 
+var releaseSHA string
+
 var demoPeople = []struct{ Email, Name, Role, Scope string }{{"admin@suite.test", "Administrator", "admin", "back"}, {"office@suite.test", "Back-office operator", "operator", "back"}, {"front@suite.test", "Front-office operator", "operator", "front"}, {"viewer@suite.test", "Read-only viewer", "readonly", "back"}}
 
 func token() string {
@@ -400,7 +402,11 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(w, 503, "Database unavailable")
 			return
 		}
-		ok(w, map[string]string{"backend": "go", "status": "ready"})
+		health := map[string]string{"backend": "go", "status": "ready"}
+		if _, err := hex.DecodeString(releaseSHA); err == nil && len(releaseSHA) == 40 && releaseSHA == strings.ToLower(releaseSHA) {
+			health["revision"] = releaseSHA
+		}
+		ok(w, health)
 	})
 	mux.HandleFunc("/api/auth/{action}", a.auth)
 	mux.HandleFunc("/api/stations/{site}/traffic", a.trafficAPI)
