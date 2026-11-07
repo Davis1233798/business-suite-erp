@@ -13,6 +13,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux"))
 from erp_candidate import candidate_container, rehearsal
+from erp_activate import ACTIVE_NAME, PRIVATE_BASE, SERVICE_LABEL, activate
 
 
 DATA_PATH = "/api/stations/erp/data?view=back"
@@ -119,6 +120,45 @@ def main(image, revision):
         print("ERP purchase and retry survived container replacement; candidate approval and other-tenant reads were isolated.")
     finally:
         docker("volume", "rm", volume)
+
+    test_activation_and_rollback(image, revision)
+
+
+def test_activation_and_rollback(image, revision):
+    with build_opener(HTTPCookieProcessor(CookieJar())) as browser:
+        try:
+            first = activate(docker, image, revision)
+            login(browser, PRIVATE_BASE)
+            data = call(browser, PRIVATE_BASE, DATA_PATH)
+            order = {
+                "action": "create",
+                "requestId": str(uuid4()),
+                "supplierId": next(row["id"] for row in data["suppliers"] if row["isActive"]),
+                "lines": [{
+                    "itemId": next(row["id"] for row in data["items"] if row["isActive"]),
+                    "quantity": 2, "unitPrice": 103,
+                }],
+            }
+            created = call(browser, PRIVATE_BASE, PURCHASE_PATH, order)
+            try:
+                activate(docker, image, "0" * 40, first)
+            except RuntimeError as error:
+                assert "revision" in str(error)
+            else:
+                raise AssertionError("failed activation was accepted")
+            assert docker("inspect", "--format", "{{.Id}}", ACTIVE_NAME) == first
+            assert call(browser, PRIVATE_BASE, PURCHASE_PATH, order)["id"] == created["id"]
+
+            second = activate(docker, image, revision, first)
+            assert first != second
+            assert docker("inspect", "--format", "{{.State.Running}}", first) == "false"
+            assert call(browser, PRIVATE_BASE, PURCHASE_PATH, order)["id"] == created["id"]
+        finally:
+            # This CI runner is disposable. Scope cleanup to the ERP fixture.
+            for container in docker("ps", "-aq", "--filter", f"label={SERVICE_LABEL}").splitlines():
+                docker("rm", "--force", container)
+            for volume in docker("volume", "ls", "-q", "--filter", "label=suite.erp.release=true").splitlines():
+                docker("volume", "rm", volume)
 
 
 if __name__ == "__main__":
