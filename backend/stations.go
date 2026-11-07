@@ -94,6 +94,14 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		a.postJournal(w, r, id, g)
 		return
 	}
+	if site == "erp" && action == "inventory" && r.Method == http.MethodPost {
+		a.transferInventory(w, r, id, g)
+		return
+	}
+	if site == "erp" && action == "inventory" && r.Method == http.MethodGet {
+		a.inventoryAvailability(w, r, id, g)
+		return
+	}
 	if action == "data" && r.Method == "GET" {
 		front := r.URL.Query().Get("view") == "front"
 		if !front && g.Scope != "back" {
