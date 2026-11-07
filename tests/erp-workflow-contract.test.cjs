@@ -42,7 +42,7 @@ test('only a main push publishes the ERP image', () => {
 });
 
 test('deployment uses the same main workflow and its pinned ARM64 artifact', () => {
-  assert.match(deployJob, /^    needs: release$/m);
+  assert.match(deployJob, /^    needs: \[release, rootless-host\]$/m);
   assert.match(deployJob, /^    if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' && vars\.ERP_DEPLOY_ENABLED == 'true'$/m);
   assert.match(deployJob, /erp-arm64-release-\$\{\{ github\.sha \}\}/);
   assert.match(deployJob, /StrictHostKeyChecking=yes/);

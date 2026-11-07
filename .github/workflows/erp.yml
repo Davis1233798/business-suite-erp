@@ -201,7 +201,7 @@ jobs:
 
   deploy:
     name: Deploy isolated ERP to OCI
-    needs: release
+    needs: [release, rootless-host]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ERP_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
