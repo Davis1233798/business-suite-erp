@@ -74,6 +74,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "No access to this workspace")
 		return
 	}
+	if action == "stock-count" {
+		a.stockCount(w, r, id, g)
+		return
+	}
 	if action == "finance" && r.Method == http.MethodPost {
 		a.billing(w, r, id, g)
 		return
@@ -88,6 +92,14 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == "journal" && r.Method == http.MethodPost {
 		a.postJournal(w, r, id, g)
+		return
+	}
+	if site == "erp" && action == "inventory" && r.Method == http.MethodPost {
+		a.transferInventory(w, r, id, g)
+		return
+	}
+	if site == "erp" && action == "inventory" && r.Method == http.MethodGet {
+		a.inventoryAvailability(w, r, id, g)
 		return
 	}
 	if action == "data" && r.Method == "GET" {
