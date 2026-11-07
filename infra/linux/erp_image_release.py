@@ -41,8 +41,7 @@ def verified_image_id(revision, digest, image):
     return image_id
 
 
-def pull_and_verify(revision, digest):
-    reference = release_reference(revision, digest)
+def runtime_docker():
     uid = os.geteuid()
     account = pwd.getpwuid(uid)
     if uid == 0 or account.pw_name != RUNTIME_ACCOUNT or Path(account.pw_dir) != RUNTIME_HOME:
@@ -61,7 +60,7 @@ def pull_and_verify(revision, digest):
             env={"PATH": "/usr/bin:/bin", "HOME": str(RUNTIME_HOME), "XDG_RUNTIME_DIR": str(runtime_dir)},
             text=True,
             timeout=timeout,
-        )
+        ).strip()
 
     info = json.loads(docker("info", "--format", "{{json .}}"))
     if "name=rootless" not in info.get("SecurityOptions", []):
@@ -71,11 +70,21 @@ def pull_and_verify(revision, digest):
         raise ValueError("ERP Docker storage must belong to its runtime home")
     if shutil.disk_usage(storage).free < FREE_BYTES_FLOOR:
         raise ValueError("ERP image pull refused below the 4 GiB free-space floor")
+    return docker
+
+
+def pull_verified_image(docker, revision, digest):
+    reference = release_reference(revision, digest)
     docker("pull", "--platform", "linux/arm64", reference, timeout=300)
     images = json.loads(docker("image", "inspect", reference))
     if len(images) != 1:
         raise ValueError("Expected one image for the pinned ERP digest")
     return verified_image_id(revision, digest, images[0])
+
+
+def pull_and_verify(revision, digest):
+    release_reference(revision, digest)
+    return pull_verified_image(runtime_docker(), revision, digest)
 
 
 def main():
