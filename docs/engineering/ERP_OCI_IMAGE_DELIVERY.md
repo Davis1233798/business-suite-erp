@@ -89,3 +89,14 @@ and restores the previous container name and listener. The remote test
 forces a failed revision check at the private endpoint, then verifies the
 previous purchase and retry result before accepting a successful replacement.
 Release volumes retained for rollback need an operator retention policy.
+
+## CI entry point
+
+The SSH key is restricted to a forced command on the dedicated deployment
+account. The SSH and runtime wrappers each accept only `status` or
+`deploy <commit> <digest>`. The sudo rule authorizes one fixed runtime
+wrapper with fixed arguments. The runtime wrapper reads the request from
+standard input, sanitizes the environment, and calls the host-owned ERP
+release code. GitHub Actions verifies the pinned host key and uses the digest
+recorded by the native ARM64 publication job. A repository variable enables
+the main-only deployment after the target has been provisioned and verified.
