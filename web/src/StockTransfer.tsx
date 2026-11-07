@@ -62,7 +62,8 @@ export function StockTransfer({data,role,onChanged}:{data:Record<string,Row[]>;r
  async function submit(event:React.FormEvent){event.preventDefault();await sendTransfer()}
 
  function abandonRejectedIntent(){setIntent(null);setIntentLocked(false);setError('');setMessage('');}
- if(role==='readonly'||!items.length||warehouses.length<2)return null;
+ if(role==='readonly')return null;
+ if(!items.length||warehouses.length<2)return <section className="panel no-print"><h2>{tr('Warehouse transfer')}</h2><p>{tr('Loading inventory…')}</p></section>;
  const shownItem=locked?intent!.itemId:item;
  const shownFrom=locked?intent!.fromWarehouseId:from;
  const shownTo=locked?intent!.toWarehouseId:to;

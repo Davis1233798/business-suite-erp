@@ -16,6 +16,7 @@ const traditionalChinese:Record<string,string> = {
   "Source available": "來源剩餘",
   "Destination balance": "目的庫存",
   "Retry key retained": "重試識別碼已保留",
+  "Loading inventory…": "正在載入庫存…",
   "Retry transfer": "重試調撥",
   "A new transfer can be started after a definitive rejection.": "收到明確拒絕後即可開始新的調撥。",
   "The prior response definitively rejected this payload.": "伺服器已明確拒絕先前的資料。",
