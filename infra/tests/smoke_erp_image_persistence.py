@@ -1,6 +1,6 @@
 """Exercise persisted ERP business state on a disposable CI volume."""
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from http.cookiejar import CookieJar
 import json
 from pathlib import Path
@@ -125,7 +125,7 @@ def main(image, revision):
 
 
 def test_activation_and_rollback(image, revision):
-    with build_opener(HTTPCookieProcessor(CookieJar())) as browser:
+    with closing(build_opener(HTTPCookieProcessor(CookieJar()))) as browser:
         try:
             first = activate(docker, image, revision)
             login(browser, PRIVATE_BASE)

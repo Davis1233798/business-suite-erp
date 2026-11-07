@@ -44,17 +44,22 @@ def wait_ready(base):
     raise RuntimeError("ERP candidate did not become ready")
 
 
-def copy_active_snapshot(docker, active, candidate_volume, candidate_image):
+def active_data_volume(docker, active):
     mounts = json.loads(docker("inspect", "--format", "{{json .Mounts}}", active))
     data = [mount for mount in mounts if mount.get("Destination") == DATA and mount.get("Type") == "volume"]
     if len(data) != 1 or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", data[0].get("Name", "")):
         raise RuntimeError("Active ERP data must use a dedicated Docker volume")
+    return data[0]["Name"]
+
+
+def copy_active_snapshot(docker, active, candidate_volume, candidate_image):
+    source_volume = active_data_volume(docker, active)
     snapshot = "rehearsal-" + uuid4().hex + ".sqlite"
     try:
         docker("exec", active, SERVER, "--backup", f"{DATA}/{snapshot}", timeout=90)
         docker(
             "run", "--rm", "--network", "none", "--label", CANDIDATE_LABEL,
-            "--mount", f"type=volume,source={data[0]['Name']},target=/source,readonly",
+            "--mount", f"type=volume,source={source_volume},target=/source,readonly",
             "--mount", f"type=volume,source={candidate_volume},target={DATA}",
             candidate_image, "cp", f"/source/{snapshot}", f"{DATA}/stations.sqlite",
             timeout=90,
@@ -93,17 +98,21 @@ def candidate_container(docker, image, active=None):
 
 def rehearsal(docker, image, revision, active=None):
     with candidate_container(docker, image, active) as base:
-        health = wait_ready(base)
-        if health.get("backend") != "go" or health.get("revision") != revision:
-            raise RuntimeError("ERP candidate health revision does not match the release")
-        for path, expected in (
-            ("/erp/login", 200),
-            ("/api/stations/erp/data", 401),
-            ("/mes/login", 404),
-        ):
-            status, _ = read_response(base, path)
-            if status != expected:
-                raise RuntimeError(f"ERP candidate returned {status} for {path}, expected {expected}")
+        verify_endpoint(base, revision)
+
+
+def verify_endpoint(base, revision):
+    health = wait_ready(base)
+    if health.get("backend") != "go" or health.get("revision") != revision:
+        raise RuntimeError("ERP health revision does not match the release")
+    for path, expected in (
+        ("/erp/login", 200),
+        ("/api/stations/erp/data", 401),
+        ("/mes/login", 404),
+    ):
+        status, _ = read_response(base, path)
+        if status != expected:
+            raise RuntimeError(f"ERP returned {status} for {path}, expected {expected}")
 
 
 def main():
