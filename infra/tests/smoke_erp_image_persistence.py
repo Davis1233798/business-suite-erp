@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from http.cookiejar import CookieJar
 import json
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -10,13 +11,16 @@ from urllib.error import URLError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 from uuid import uuid4
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux"))
+from erp_candidate import candidate_container, rehearsal
+
 
 DATA_PATH = "/api/stations/erp/data?view=back"
 PURCHASE_PATH = "/api/stations/erp/purchases"
 
 
-def docker(*args):
-    return subprocess.check_output(["docker", *args], text=True, timeout=60).strip()
+def docker(*args, timeout=60):
+    return subprocess.check_output(["docker", *args], text=True, timeout=timeout).strip()
 
 
 def call(browser, base, path, data=None):
@@ -61,7 +65,7 @@ def login(browser, base):
     })
 
 
-def main(image):
+def main(image, revision):
     volume = docker("volume", "create", "erp-image-ci-" + uuid4().hex)
     try:
         browser = build_opener(HTTPCookieProcessor(CookieJar()))
@@ -80,27 +84,25 @@ def main(image):
             }
             created = call(browser, base, PURCHASE_PATH, order)
 
-            candidate_volume = docker("volume", "create", "erp-candidate-ci-" + uuid4().hex)
             try:
-                snapshot = "candidate.sqlite"
-                docker("exec", active, "/srv/station/station-server", "--backup", f"/srv/station/data/{snapshot}")
-                docker(
-                    "run", "--rm",
-                    "--mount", f"type=volume,source={volume},target=/source,readonly",
-                    "--mount", f"type=volume,source={candidate_volume},target=/srv/station/data",
-                    image, "cp", f"/source/{snapshot}", "/srv/station/data/stations.sqlite",
-                )
-                with running_image(image, candidate_volume) as (candidate, _):
-                    replay = call(browser, candidate, PURCHASE_PATH, order)
-                    assert replay["id"] == created["id"]
-                    approved = call(browser, candidate, PURCHASE_PATH, {
-                        "action": "approve", "requestId": str(uuid4()), "poId": created["id"],
-                    })
-                    assert approved["status"] == "approved"
-                current = call(browser, base, DATA_PATH)
-                assert next(row for row in current["purchaseOrders"] if row["id"] == created["id"])["status"] == "draft"
-            finally:
-                docker("volume", "rm", candidate_volume)
+                rehearsal(docker, image, "0" * 40, active)
+            except RuntimeError as error:
+                assert "revision" in str(error)
+            else:
+                raise AssertionError("a candidate with the wrong revision passed")
+            assert not docker("ps", "-aq", "--filter", "label=suite.erp.candidate=true")
+            assert not docker("volume", "ls", "-q", "--filter", "label=suite.erp.candidate=true")
+
+            with candidate_container(docker, image, active) as candidate:
+                replay = call(browser, candidate, PURCHASE_PATH, order)
+                assert replay["id"] == created["id"]
+                approved = call(browser, candidate, PURCHASE_PATH, {
+                    "action": "approve", "requestId": str(uuid4()), "poId": created["id"],
+                })
+                assert approved["status"] == "approved"
+            current = call(browser, base, DATA_PATH)
+            assert next(row for row in current["purchaseOrders"] if row["id"] == created["id"])["status"] == "draft"
+            rehearsal(docker, image, revision, active)
 
         with running_image(image, volume) as (base, _):
             data = call(browser, base, DATA_PATH)
@@ -120,4 +122,4 @@ def main(image):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(*sys.argv[1:])

@@ -124,7 +124,7 @@ jobs:
         run: bash infra/linux/smoke-erp-release-image.sh "erp-ci:${GITHUB_SHA}" "$IMAGE_ARCHITECTURE" "$GITHUB_SHA"
       - name: Verify persisted ERP state across ARM64 container replacement
         if: matrix.architecture == 'arm64'
-        run: python3 infra/tests/smoke_erp_image_persistence.py "erp-ci:${GITHUB_SHA}"
+        run: python3 infra/tests/smoke_erp_image_persistence.py "erp-ci:${GITHUB_SHA}" "$GITHUB_SHA"
       - name: Verify main head before image publication
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
