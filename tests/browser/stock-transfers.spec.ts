@@ -1,39 +1,140 @@
-import {test,expect} from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-async function signIn(page:import('@playwright/test').Page,email='office@suite.test'){
- await page.context().addCookies([{name:'suite_demo_space',value:crypto.randomUUID().replaceAll('-','').padEnd(64,'0').slice(0,64),domain:'127.0.0.1',path:'/'}]);
- await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/(back|front)/);if(email==='office@suite.test'||email==='admin@suite.test')await page.goto('/erp/back');
+const transferRegion = (page: Page) => page.getByRole('region', { name: 'Warehouse transfer', exact: true });
+
+async function signIn(page: Page, email = 'office@suite.test') {
+  const demoSpace = crypto.randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64);
+  await page.context().addCookies([
+    { name: 'suite_demo_space', value: demoSpace, domain: '127.0.0.1', path: '/' },
+  ]);
+  await page.goto('/erp/login');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('SuiteDemo!2026');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/erp\/(back|front)/);
+  if (email === 'office@suite.test' || email === 'admin@suite.test') {
+    await page.goto('/erp/back');
+  }
 }
 
-test('administrator transfers stock from persisted availability and sees it after reload',async({page})=>{
- await signIn(page,'admin@suite.test');const panel=page.locator('section').filter({has:page.getByRole('heading',{name:'Warehouse transfer',exact:true})});
- const source=panel.getByLabel('Source warehouse',{exact:true}),destination=panel.getByLabel('Destination warehouse',{exact:true});
- await expect(source.locator('option').first()).toHaveAttribute('value',/.+/);
- const sourceOptions=await source.locator('option').evaluateAll(options=>options.map(o=>(o as HTMLOptionElement).value));
- const destinationOptions=await destination.locator('option').evaluateAll(options=>options.map(o=>(o as HTMLOptionElement).value));
- await source.selectOption(sourceOptions[0]);await destination.selectOption(destinationOptions.find(x=>x!==sourceOptions[0])!);
- await expect(panel.getByText(/Available:/)).toContainText(/\d+/);
- const input=panel.getByLabel('Transfer quantity',{exact:true});await input.fill('1');await panel.getByRole('button',{name:'Confirm stock transfer',exact:true}).click();
- await expect(panel.getByRole('status')).toContainText('Transfer complete');
- await expect(panel.getByText(/Available:/)).toContainText('8');
- const result=await(await page.request.get('/api/stations/erp/data?view=back')).json();expect(result.data.stockLedger.some((r:{changeType:string})=>r.changeType==='transfer_out')).toBeTruthy();
- await page.reload();await expect(page.getByRole('heading',{name:'Warehouse transfer',exact:true})).toBeVisible();
+async function chooseStockedWarehouses(page: Page) {
+  const panel = transferRegion(page);
+  await expect(panel.getByLabel('Source warehouse', { exact: true })).toBeVisible();
+  const warehouseData = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const itemId = await panel.getByLabel('Transfer item', { exact: true }).inputValue();
+  const warehouses = warehouseData.data.warehouses as Array<{ id: string }>;
+  const balances = await Promise.all(warehouses.map(async warehouse => {
+    const response = await page.request.get(
+      `/api/stations/erp/inventory?itemId=${encodeURIComponent(itemId)}&warehouseId=${encodeURIComponent(warehouse.id)}`,
+    );
+    const result = await response.json();
+    return { id: warehouse.id, available: result.data.available as number };
+  }));
+  const sourceWarehouse = balances.find(warehouse => warehouse.available > 0);
+  const destinationWarehouse = warehouses.find(warehouse => warehouse.id !== sourceWarehouse?.id);
+  expect(sourceWarehouse, 'fixture must provide at least one stocked warehouse').toBeTruthy();
+  expect(destinationWarehouse, 'fixture must provide a distinct destination warehouse').toBeTruthy();
+  await panel.getByLabel('Source warehouse', { exact: true }).selectOption(sourceWarehouse!.id);
+  await panel.getByLabel('Destination warehouse', { exact: true }).selectOption(destinationWarehouse!.id);
+  return { panel, sourceWarehouse: sourceWarehouse!, destinationWarehouse: destinationWarehouse! };
+}
+
+async function receiveStockThroughPurchaseWorkflow(page: Page) {
+  const panel = page.locator('section').filter({
+    has: page.getByRole('heading', { name: 'Purchase workflow', exact: true }),
+  });
+  await panel.getByLabel('Supplier', { exact: true }).selectOption({ index: 1 });
+  await panel.getByLabel('Purchase item 1', { exact: true }).selectOption({ index: 1 });
+  await panel.getByLabel('Order quantity 1', { exact: true }).fill('3');
+  await panel.getByLabel('Unit price 1', { exact: true }).fill('120');
+
+  const orderCreated = page.waitForResponse(response =>
+    response.url().endsWith('/api/stations/erp/purchases') && response.request().method() === 'POST',
+  );
+  await panel.getByRole('button', { name: 'Create draft', exact: true }).click();
+  const orderResult = await (await orderCreated).json();
+  expect(orderResult.success).toBeTruthy();
+  const purchaseOrderId = orderResult.data.id as string;
+
+  await expect(panel.getByLabel('Purchase order', { exact: true })).toHaveValue(purchaseOrderId);
+  await panel.getByRole('button', { name: 'Approve order', exact: true }).click();
+  await panel.getByLabel('Warehouse', { exact: true }).selectOption({ index: 1 });
+  await panel.getByLabel('Receipt quantity 1', { exact: true }).fill('3');
+  const receiptCreated = page.waitForResponse(response =>
+    response.url().endsWith('/api/stations/erp/purchases') && response.request().method() === 'POST',
+  );
+  await panel.getByRole('button', { name: 'Receive goods', exact: true }).click();
+  const receiptResult = await (await receiptCreated).json();
+  expect(receiptResult.success).toBeTruthy();
+  await expect(panel.getByText('received', { exact: true })).toBeVisible();
+}
+
+test('administrator transfers stock from persisted availability and sees it after reload', async ({ page }) => {
+  await signIn(page, 'admin@suite.test');
+  await receiveStockThroughPurchaseWorkflow(page);
+  const { panel, sourceWarehouse } = await chooseStockedWarehouses(page);
+  const availableText = panel.getByText(/Available:/);
+  await expect(availableText).toContainText(String(sourceWarehouse.available));
+
+  await panel.getByLabel('Transfer quantity', { exact: true }).fill('1');
+  await panel.getByRole('button', { name: 'Confirm stock transfer', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Transfer complete');
+  await expect(availableText).toContainText(String(sourceWarehouse.available - 1));
+
+  const ledger = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  expect(ledger.data.stockLedger.some((row: { changeType: string }) => row.changeType === 'transfer_out')).toBeTruthy();
+  await page.reload();
+  await expect(transferRegion(page).getByRole('heading', { name: 'Warehouse transfer', exact: true })).toBeVisible();
 });
 
-test('uncertain transfer retries preserve the original payload and key',async({page})=>{
- await signIn(page,'admin@suite.test');const panel=page.locator('section').filter({has:page.getByRole('heading',{name:'Warehouse transfer',exact:true})});
- const source=panel.getByLabel('Source warehouse',{exact:true}),destination=panel.getByLabel('Destination warehouse',{exact:true});
- await expect(source.locator('option').first()).toHaveAttribute('value',/.+/);
- const sourceId=await source.locator('option').first().getAttribute('value');const destId=await destination.locator('option').evaluateAll(options=>options.map(o=>(o as HTMLOptionElement).value).find(x=>x!==sourceId));
- await source.selectOption(sourceId!);await destination.selectOption(destId!);await panel.getByLabel('Transfer quantity',{exact:true}).fill('1');
- let rejectOnce=true;await page.route('**/api/stations/erp/inventory',async route=>{if(route.request().method()==='POST'&&rejectOnce){rejectOnce=false;await route.abort('connectionreset');return}await route.continue()});
- await panel.getByRole('button',{name:'Confirm stock transfer',exact:true}).click();await expect(panel.getByRole('alert')).toBeVisible();
- const retryKey=await panel.locator('code').textContent();expect(retryKey).toBeTruthy();
- await expect(panel.getByLabel('Transfer item')).toBeDisabled();await expect(panel.getByRole('button',{name:'Retry transfer',exact:true})).toBeVisible();
- await panel.getByRole('button',{name:'Retry transfer',exact:true}).click();await expect(panel.getByRole('status')).toContainText('Transfer complete');
+test('uncertain transfer retries preserve the original payload and key', async ({ page }) => {
+  await signIn(page, 'admin@suite.test');
+  const { panel } = await chooseStockedWarehouses(page);
+  await panel.getByLabel('Transfer quantity', { exact: true }).fill('1');
+  const before = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const existingLedgerIds = new Set((before.data.stockLedger as Array<{ id: string }>).map(row => row.id));
+
+  let rejectOnce = true;
+  let firstPayload: Record<string, unknown> | undefined;
+  await page.route('**/api/stations/erp/inventory', async route => {
+    if (route.request().method() === 'POST' && rejectOnce) {
+      rejectOnce = false;
+      firstPayload = route.request().postDataJSON();
+      await route.abort('connectionreset');
+      return;
+    }
+    if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON()).toEqual(firstPayload);
+    }
+    await route.continue();
+  });
+
+  await panel.getByRole('button', { name: 'Confirm stock transfer', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  const retryKey = await panel.locator('code').textContent();
+  expect(retryKey).toBeTruthy();
+  await expect(panel.getByLabel('Transfer item', { exact: true })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Retry transfer', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Retry transfer', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Transfer complete');
+
+  const ledger = await (await page.request.get('/api/stations/erp/data?view=back')).json();
+  const transferRows = (ledger.data.stockLedger as Array<{
+    id: string;
+    changeType: string;
+    quantityChange: number;
+    referenceDoc: string;
+  }>).filter(row => !existingLedgerIds.has(row.id) && row.changeType.startsWith('transfer_'));
+  expect(firstPayload?.requestId).toBeTruthy();
+  expect(transferRows).toHaveLength(2);
+  expect(transferRows[0].referenceDoc).toBe(transferRows[1].referenceDoc);
+  expect(transferRows[0].quantityChange + transferRows[1].quantityChange).toBe(0);
 });
 
-test('read-only and front-office accounts have no transfer form',async({page})=>{
- await signIn(page,'viewer@suite.test');await expect(page.getByRole('heading',{name:'Warehouse transfer',exact:true})).toHaveCount(0);
- await page.context().clearCookies();await signIn(page,'front@suite.test');await expect(page.getByRole('heading',{name:'Warehouse transfer',exact:true})).toHaveCount(0);
+test('read-only and front-office accounts have no transfer form', async ({ page }) => {
+  await signIn(page, 'viewer@suite.test');
+  await expect(page.getByRole('heading', { name: 'Warehouse transfer', exact: true })).toHaveCount(0);
+  await page.context().clearCookies();
+  await signIn(page, 'front@suite.test');
+  await expect(page.getByRole('heading', { name: 'Warehouse transfer', exact: true })).toHaveCount(0);
 });
