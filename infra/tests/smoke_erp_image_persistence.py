@@ -47,7 +47,7 @@ def running_image(image, volume):
                 time.sleep(1)
         else:
             raise AssertionError("ERP image did not become ready")
-        yield base
+        yield base, container
     finally:
         # Remove the test container while leaving its data volume available.
         docker("rm", "--force", container)
@@ -65,7 +65,7 @@ def main(image):
     volume = docker("volume", "create", "erp-image-ci-" + uuid4().hex)
     try:
         browser = build_opener(HTTPCookieProcessor(CookieJar()))
-        with running_image(image, volume) as base:
+        with running_image(image, volume) as (base, active):
             login(browser, base)
             data = call(browser, base, DATA_PATH)
             order = {
@@ -80,7 +80,29 @@ def main(image):
             }
             created = call(browser, base, PURCHASE_PATH, order)
 
-        with running_image(image, volume) as base:
+            candidate_volume = docker("volume", "create", "erp-candidate-ci-" + uuid4().hex)
+            try:
+                snapshot = "candidate.sqlite"
+                docker("exec", active, "/srv/station/station-server", "--backup", f"/srv/station/data/{snapshot}")
+                docker(
+                    "run", "--rm",
+                    "--mount", f"type=volume,source={volume},target=/source,readonly",
+                    "--mount", f"type=volume,source={candidate_volume},target=/srv/station/data",
+                    image, "cp", f"/source/{snapshot}", "/srv/station/data/stations.sqlite",
+                )
+                with running_image(image, candidate_volume) as (candidate, _):
+                    replay = call(browser, candidate, PURCHASE_PATH, order)
+                    assert replay["id"] == created["id"]
+                    approved = call(browser, candidate, PURCHASE_PATH, {
+                        "action": "approve", "requestId": str(uuid4()), "poId": created["id"],
+                    })
+                    assert approved["status"] == "approved"
+                current = call(browser, base, DATA_PATH)
+                assert next(row for row in current["purchaseOrders"] if row["id"] == created["id"])["status"] == "draft"
+            finally:
+                docker("volume", "rm", candidate_volume)
+
+        with running_image(image, volume) as (base, _):
             data = call(browser, base, DATA_PATH)
             assert sum(row["id"] == created["id"] for row in data["purchaseOrders"]) == 1
             replay = call(browser, base, PURCHASE_PATH, order)
@@ -92,7 +114,7 @@ def main(image):
             login(unrelated, base)
             other_data = call(unrelated, base, DATA_PATH)
             assert all(row["id"] != created["id"] for row in other_data["purchaseOrders"])
-        print("ERP purchase and replay result survived ARM64 container replacement; a separate demo tenant could not see the purchase.")
+        print("ERP purchase and retry survived container replacement; candidate approval and other-tenant reads were isolated.")
     finally:
         docker("volume", "rm", volume)
 
