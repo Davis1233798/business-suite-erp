@@ -104,12 +104,18 @@ Environment=HOME=$HOME_RUNTIME
 Environment=USER=$RUNTIME
 Environment=LOGNAME=$RUNTIME
 Environment=XDG_RUNTIME_DIR=/run/user/$runtime_uid
+Environment=XDG_CONFIG_HOME=$HOME_RUNTIME/.config
 Environment=XDG_DATA_HOME=$HOME_RUNTIME/.local/share
+Environment=XDG_CACHE_HOME=$HOME_RUNTIME/.cache
 Environment=DOCKER_CONFIG=$HOME_RUNTIME/.docker
 UnsetEnvironment=DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_API_VERSION
 ExecStartPost=/usr/bin/chmod 0600 /run/user/$runtime_uid/docker.sock
 EOF
-runuser -u "$RUNTIME" -- env -i HOME="$HOME_RUNTIME" USER="$RUNTIME" LOGNAME="$RUNTIME" XDG_RUNTIME_DIR="/run/user/$runtime_uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$runtime_uid/bus" PATH=/usr/local/libexec/mes-rootless:/usr/bin:/bin /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh install --force
+if ! runuser -u "$RUNTIME" -- env -i HOME="$HOME_RUNTIME" USER="$RUNTIME" LOGNAME="$RUNTIME" XDG_RUNTIME_DIR="/run/user/$runtime_uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$runtime_uid/bus" PATH="/usr/local/libexec/mes-rootless:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh install --force; then
+  journalctl --no-pager -n 120 "_UID=$runtime_uid" >&2 || true
+  runuser -u "$RUNTIME" -- env -i HOME="$HOME_RUNTIME" PATH=/usr/bin:/bin XDG_RUNTIME_DIR="/run/user/$runtime_uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$runtime_uid/bus" /usr/bin/systemctl --user --no-pager --full status docker.service >&2 || true
+  fail 'rootless Docker installation failed; inspect the journal output above'
+fi
 for _ in $(seq 1 60); do [[ -S /run/user/$runtime_uid/docker.sock ]] && break; sleep 2; done
 [[ -S /run/user/$runtime_uid/docker.sock && $(stat -c '%U:%a' /run/user/$runtime_uid/docker.sock) == "$RUNTIME:600" ]] || fail 'rootless Docker socket unavailable or unsafe'
 [[ $(systemctl is-active docker.service) == active ]] || fail 'rootful Docker service was disrupted'
