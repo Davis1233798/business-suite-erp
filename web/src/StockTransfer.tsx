@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { tr } from './locale';
 
 type Row = Record<string, any>;
+type ApiResult<T> = {
+  success: boolean;
+  data: T;
+  error?: { message?: string };
+};
 
 type TransferIntent = {
   itemId: string;
@@ -54,7 +59,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
       signal: controller.signal,
     })
       .then(async response => {
-        const result = await response.json();
+        const result: ApiResult<{ available: number }> = await response.json();
         if (!response.ok || !result.success) {
           throw new Error(result.error?.message || 'Availability lookup failed');
         }
@@ -91,7 +96,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'transfer', ...currentIntent }),
       });
-      const result = await response.json();
+      const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> = await response.json();
       if (!response.ok || !result.success) {
         throw new DefinitiveTransferError(result.error?.message || 'Transfer failed');
       }
