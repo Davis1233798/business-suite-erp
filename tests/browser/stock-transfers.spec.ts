@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const transferRegion = (page: Page) => page.locator('section[aria-label="Warehouse transfer"]');
+const transferRegion = (page: Page) => page.locator(
+  'section[aria-label="Warehouse transfer"], section[aria-label="倉庫調撥"]',
+);
 
 async function signIn(page: Page, email = 'office@suite.test') {
   const demoSpace = crypto.randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64);
