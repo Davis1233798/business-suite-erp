@@ -99,12 +99,12 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
         body: JSON.stringify({ action: 'transfer', ...currentIntent }),
       });
       if (response.status >= 400 && response.status < 500) {
-        const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined =
-          await response.json().catch(() => undefined);
+        const result = await response.json().catch(() => undefined) as
+          ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined;
         throw new DefinitiveTransferError(result?.error?.message || 'Transfer failed');
       }
-      const result: ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined =
-        await response.json().catch(() => undefined);
+      const result = await response.json().catch(() => undefined) as
+        ApiResult<{ sourceBalanceAfter: number; destBalanceAfter: number }> | undefined;
       if (response.status >= 500 || !response.ok || !result?.success) {
         throw new Error(
           result?.error?.message || 'Transfer response is uncertain. Retry the same request.',
