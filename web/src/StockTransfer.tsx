@@ -4,7 +4,7 @@ import {tr} from './locale';
 type Row=Record<string,any>;
 type TransferIntent={itemId:string;fromWarehouseId:string;toWarehouseId:string;quantity:number;requestId:string};
 
-export function StockTransfer({data,role,onChanged}:{data:Record<string,Row[]>;role:string;onChanged:()=>Promise<void>}){
+export function StockTransfer({data,role,onChanged,availabilityPath}:{data:Record<string,Row[]>;role:string;onChanged:()=>Promise<void>;availabilityPath?:string}){
  const [item,setItem]=useState('');
  const [from,setFrom]=useState('');
  const [to,setTo]=useState('');
@@ -30,7 +30,7 @@ export function StockTransfer({data,role,onChanged}:{data:Record<string,Row[]>;r
   setAvailable(null);
   if(!item||!from)return;
   const abort=new AbortController();
-  fetch(`/api/stations/erp/inventory?itemId=${encodeURIComponent(item)}&warehouseId=${encodeURIComponent(from)}`,{credentials:'same-origin',signal:abort.signal})
+  fetch(`${availabilityPath||'/api/stations/erp/inventory'}?itemId=${encodeURIComponent(item)}&warehouseId=${encodeURIComponent(from)}`,{credentials:'same-origin',signal:abort.signal})
    .then(async response=>{
     const result:any=await response.json();
     if(!response.ok||!result.success)throw Error(result.error?.message||'Availability lookup failed');
@@ -45,7 +45,7 @@ export function StockTransfer({data,role,onChanged}:{data:Record<string,Row[]>;r
   const current=intentLocked&&intent?intent:{itemId:item,fromWarehouseId:from,toWarehouseId:to,quantity:Number(quantity),requestId:crypto.randomUUID()};
   setIntent(current);setIntentLocked(true);
   try{
-   const response=await fetch('/api/stations/erp/inventory',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transfer',...current})});
+   const response=await fetch(availabilityPath||'/api/stations/erp/inventory',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transfer',...current})});
    const result:any=await response.json();
    if(!response.ok||!result.success)throw new DefinitiveTransferError(result.error?.message||'Transfer failed');
    setMessage(`${tr('Transfer complete')} · ${tr('Source available')}: ${result.data.sourceBalanceAfter} · ${tr('Destination balance')}: ${result.data.destBalanceAfter}`);
