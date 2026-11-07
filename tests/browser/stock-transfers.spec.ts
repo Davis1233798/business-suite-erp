@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 async function signIn(page:import('@playwright/test').Page,email='office@suite.test'){
  await page.context().addCookies([{name:'suite_demo_space',value:crypto.randomUUID().replaceAll('-','').padEnd(64,'0').slice(0,64),domain:'127.0.0.1',path:'/'}]);
- await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/(back|front)/);
+ await page.goto('/erp/login');await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('SuiteDemo!2026');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page).toHaveURL(/\/erp\/(back|front)/);if(email==='office@suite.test')await page.goto('/erp/back');
 }
 
 test('operator transfers stock from persisted availability and sees it after reload',async({page})=>{
