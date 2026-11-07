@@ -136,6 +136,21 @@ test('uncertain transfer retries preserve the original payload and key', async (
   expect(transferRows[0].quantityChange + transferRows[1].quantityChange).toBe(0);
 });
 
+test('transfer form stays usable on mobile and localizes to Traditional Chinese', async ({ page }) => {
+  await signIn(page, 'admin@suite.test');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const panel = transferRegion(page);
+  await expect(panel.locator('select')).toHaveCount(3);
+  await expect(panel.locator('select').nth(1)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+
+  await page.evaluate(() => localStorage.setItem('suite-language', 'zh-TW'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '倉庫調撥', exact: true })).toBeVisible();
+  await expect(transferRegion(page).getByRole('button', { name: '確認庫存調撥', exact: true })).toBeVisible();
+  await expect(transferRegion(page).locator('select').nth(1)).toBeVisible();
+});
+
 test('read-only and front-office accounts have no transfer form', async ({ page }) => {
   await signIn(page, 'viewer@suite.test');
   await expect(page.getByRole('heading', { name: 'Warehouse transfer', exact: true })).toHaveCount(0);
