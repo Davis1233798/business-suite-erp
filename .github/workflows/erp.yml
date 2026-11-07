@@ -48,6 +48,8 @@ jobs:
       - run: npm run install:ci
       - name: Check release workflow build boundary
         run: node --test tests/erp-workflow-contract.test.cjs
+      - name: Verify the pinned ERP OCI release contract
+        run: python3 -m unittest discover -s infra/tests -p test_erp_image_release.py
       - run: npx tsc --noEmit
       - run: npm test
       - run: go -C backend test -race -timeout=20m ./...

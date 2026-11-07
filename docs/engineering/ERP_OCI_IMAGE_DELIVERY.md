@@ -45,3 +45,16 @@ Recheck those conditions during provisioning. MES already uses 18095.
 4. Run the automatic main delivery and check the actual private OCI ERP
    health revision. Treat public routing and production data import as
    subsequent acceptance gates.
+
+## Implementation status
+
+The image verifier accepts a commit SHA and manifest digest and pulls from
+the fixed ERP package. It checks the dedicated runtime account, rootless
+socket ownership, daemon storage, and a 4 GiB free-space floor before the
+pull. The Linux ARM64 image must have the expected registry digest and
+revision label. The ARM64 release job exercises persisted purchase and retry
+records across container replacement on a disposable volume.
+
+The verifier does not start or replace a service. Provisioning, the SSH
+gateway, candidate rollback, and automatic OCI activation remain separate
+acceptance steps.
