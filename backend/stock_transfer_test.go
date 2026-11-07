@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"bytes"
 	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 )
 
@@ -105,4 +108,37 @@ func TestStockTransferAuthorizationAndSecondLedgerRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	transferPost(t, a, admin, input, 200)
+}
+
+func TestConcurrentStockTransfersCannotOverdrawSource(t *testing.T) {
+	a := appForTest(t)
+	admin := login(t, a, "admin@suite.test", token())
+	org, _, item, source := shippingFixture(t, a, admin)
+	destination := "warehouse_" + token()
+	if _, err := a.db.Exec("INSERT INTO erp_warehouses(id,organization_id,name,code) VALUES(?,?,'Concurrent destination',?)", destination, org, destination); err != nil { t.Fatal(err) }
+	var balance int64
+	if err := a.db.QueryRow("SELECT balance_after FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=? ORDER BY rowid DESC LIMIT 1", org, item, source).Scan(&balance); err != nil { t.Fatal(err) }
+	want := balance / 2
+	if want < 1 { t.Fatal("fixture source stock is too small for contention test") }
+	start := make(chan struct{})
+	statuses := make(chan int, 2)
+	var group sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		group.Add(1)
+		go func() {
+			defer group.Done(); <-start
+			payload, _ := json.Marshal(map[string]any{"action":"transfer","itemId":item,"fromWarehouseId":source,"toWarehouseId":destination,"quantity":want,"requestId":token()})
+			req, _ := http.NewRequest(http.MethodPost,"/api/stations/erp/inventory",bytes.NewReader(payload)); req.Header.Set("Content-Type","application/json")
+			for _, c := range admin { req.AddCookie(c) }
+			w := httptest.NewRecorder(); a.ServeHTTP(w,req); statuses <- w.Code
+		}()
+	}
+	close(start); group.Wait(); close(statuses)
+	var successes, conflicts int
+	for status := range statuses { if status==200 {successes++} else if status==409 {conflicts++} else {t.Fatalf("concurrent transfer status %d",status)} }
+	if successes!=2 && !(successes==1&&conflicts==1) { t.Fatalf("successes=%d conflicts=%d",successes,conflicts) }
+	var sourceAfter,destAfter int64
+	_ = a.db.QueryRow("SELECT balance_after FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=? ORDER BY rowid DESC LIMIT 1",org,item,source).Scan(&sourceAfter)
+	_ = a.db.QueryRow("SELECT balance_after FROM erp_stock_ledger WHERE organization_id=? AND item_id=? AND warehouse_id=? ORDER BY rowid DESC LIMIT 1",org,item,destination).Scan(&destAfter)
+	if sourceAfter<0 || sourceAfter+destAfter!=balance {t.Fatalf("source=%d destination=%d initial=%d",sourceAfter,destAfter,balance)}
 }
