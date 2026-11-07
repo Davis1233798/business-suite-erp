@@ -54,7 +54,7 @@ export function PurchaseReturns({ data, role, onChanged }: PurchaseReturnsProps)
       credentials: 'same-origin',
     })
       .then(async res => {
-        const json = await res.json();
+        const json: any = await res.json();
         if (active) {
           if (res.ok && json.success) {
             setAvailability(json.data);
@@ -103,7 +103,7 @@ export function PurchaseReturns({ data, role, onChanged }: PurchaseReturnsProps)
           requestId: crypto.randomUUID(),
         }),
       });
-      const json = await res.json();
+      const json: any = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.error?.message || tr('Purchase return failed'));
       }
@@ -113,7 +113,7 @@ export function PurchaseReturns({ data, role, onChanged }: PurchaseReturnsProps)
       const availRes = await fetch(`/api/stations/erp/purchase-returns?receiptLineId=${encodeURIComponent(selectedLine)}`, {
         credentials: 'same-origin',
       });
-      const availJson = await availRes.json();
+      const availJson: any = await availRes.json();
       if (availRes.ok && availJson.success) {
         setAvailability(availJson.data);
       }
