@@ -3,9 +3,12 @@ WORKDIR /source
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
-RUN CGO_ENABLED=0 go build -trimpath -o /out/station-server .
+ARG SUITE_RELEASE_SHA
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-X main.releaseSHA=${SUITE_RELEASE_SHA}" -o /out/station-server .
 
 FROM debian:bookworm-slim
+ARG SUITE_RELEASE_SHA
+LABEL org.opencontainers.image.revision=${SUITE_RELEASE_SHA}
 WORKDIR /srv/station
 RUN useradd -r -u 10001 station && mkdir -p /srv/station/data && chown station:station /srv/station/data
 COPY --from=build /out/station-server /srv/station/station-server
