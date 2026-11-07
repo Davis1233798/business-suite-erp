@@ -58,3 +58,14 @@ records across container replacement on a disposable volume.
 The verifier does not start or replace a service. Provisioning, the SSH
 gateway, candidate rollback, and automatic OCI activation remain separate
 acceptance steps.
+
+## Snapshot boundary
+
+The ERP server provides a local operator command `--backup DESTINATION`.
+It takes a consistent SQLite snapshot of the existing ERP database in WAL
+mode and publishes a new file in the requested directory. The command
+opens the source read-only, requires its ERP schema marker, and refuses to
+replace existing files. A candidate can write to a copy in a separate volume
+without changing the active database. CI exercises a real purchase and
+retry through the restored copy before using this command in the deployment
+gateway.
