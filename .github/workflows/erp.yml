@@ -107,6 +107,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y apparmor dbus-user-session openssh-server rootlesskit slirp4netns uidmap
+          sudo install -d -o root -g root -m 0755 /run/sshd
           mes_fixture="$RUNNER_TEMP/mes-template-fixture"
           git init "$mes_fixture"
           git -C "$mes_fixture" remote add origin https://github.com/Davis1233798/business-suite-mes.git

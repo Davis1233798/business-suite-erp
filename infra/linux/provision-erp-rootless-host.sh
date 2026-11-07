@@ -41,6 +41,7 @@ command -v aa-status >/dev/null && aa-status --enabled || fail 'AppArmor must al
 [[ -f /usr/local/libexec/mes-rootless/dockerd-rootless.sh && -f /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh ]] || fail 'pinned rootless launchers unavailable'
 [[ $(stat -c '%u:%g:%a' /usr/local/libexec/mes-rootless) == 0:0:755 ]] || fail 'rootless launcher directory must be immutable root-owned'
 for launcher in /usr/local/libexec/mes-rootless/dockerd-rootless.sh /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh; do [[ $(stat -c '%u:%g:%a' "$launcher") == 0:0:755 ]] || fail 'rootless launchers must be immutable root-owned'; done
+[[ -d /run/sshd ]] || install -d -o root -g root -m 0755 /run/sshd
 [[ -f $SSHD && ! -L $SSHD && $(stat -c '%u:%g' "$SSHD") == 0:0 ]] || fail 'unsafe sshd_config'
 sshd -t || fail 'existing SSH configuration invalid'
 if [[ -e $STATE ]]; then
