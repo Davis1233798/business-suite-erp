@@ -106,11 +106,19 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y dbus-user-session docker-ce-rootless-extras openssh-server uidmap
+          sudo apt-get install -y apparmor dbus-user-session openssh-server rootlesskit slirp4netns uidmap
+          mes_fixture="$RUNNER_TEMP/mes-template-fixture"
+          git init "$mes_fixture"
+          git -C "$mes_fixture" remote add origin https://github.com/Davis1233798/business-suite-mes.git
+          git -C "$mes_fixture" fetch --depth=1 origin 2732a31ddc6c87d865da6bf9696051135218781
+          git -C "$mes_fixture" checkout --detach FETCH_HEAD
           sudo install -d -o root -g root -m 0755 /usr/local/libexec/mes-rootless
-          sudo install -o root -g root -m 0755 /usr/bin/dockerd-rootless.sh /usr/local/libexec/mes-rootless/dockerd-rootless.sh
-          sudo install -o root -g root -m 0755 /usr/bin/dockerd-rootless-setuptool.sh /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh
+          sudo install -o root -g root -m 0755 "$mes_fixture/infra/linux/rootless-vendor/dockerd-rootless.sh" /usr/local/libexec/mes-rootless/dockerd-rootless.sh
+          sudo install -o root -g root -m 0755 "$mes_fixture/infra/linux/rootless-vendor/dockerd-rootless-setuptool.sh" /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh
           sudo ln -s /usr/bin/docker /usr/local/libexec/mes-rootless/docker
+          sudo aa-status --enabled
+          sudo apparmor_parser -r /etc/apparmor.d/rootlesskit
+          sudo aa-status | grep -F rootlesskit
           test "$(systemctl is-active docker.service)" = active
       - name: Create an ephemeral fixture key and provision ERP accounts
         run: |

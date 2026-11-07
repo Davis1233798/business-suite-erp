@@ -31,4 +31,6 @@ grep -Fq 'forcecommand /usr/bin/python3 -Es /usr/local/lib/business-suite-erp/er
 grep -Fq 'authenticationmethods publickey' <<< "$effective" || fail 'SSH does not require public key'
 grep -Fq 'disableforwarding yes' <<< "$effective" || fail 'SSH forwarding is not disabled'
 [[ $(systemctl is-active docker.service) == active ]] || fail 'rootful Docker is not active'
+aa-status --enabled || fail 'AppArmor is not enabled'
+[[ -f /etc/apparmor.d/rootlesskit ]] && aa-status | grep -Fq rootlesskit || fail 'shared rootlesskit profile is not loaded'
 echo 'PASS: ERP runtime uses isolated rootless Docker and exact deployment gateway policy.'

@@ -17,6 +17,7 @@ test('ERP image publication waits for ERP and Windows desktop validation', () =>
 test('ERP rootless host acceptance is isolated to an ephemeral ARM runner', () => {
   assert.match(hostJob, /^    runs-on: ubuntu-24\.04-arm$/m);
   assert.match(hostJob, /ssh-keygen -q -t ed25519 -N '' -f "\$RUNNER_TEMP\/erp-fixture-key"/);
+  assert.match(hostJob, /2732a31ddc6c87d865da6bf9696051135218781/);
   assert.match(hostJob, /provision-erp-rootless-host\.sh --apply --deploy-public-key-file/);
   assert.match(hostJob, /test "\$\(systemctl is-active docker\.service\)" = active/);
   assert.doesNotMatch(hostJob, /secrets\.|ERP_DEPLOY_TARGET|gh api .*erp-production/);

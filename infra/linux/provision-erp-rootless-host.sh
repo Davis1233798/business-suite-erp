@@ -35,6 +35,8 @@ source /etc/os-release
 read -r key_type key_blob _ < "$KEY_FILE"
 [[ $key_type =~ ^(ssh-ed25519|sk-ssh-ed25519@openssh.com|ecdsa-sha2-nistp256|ssh-rsa)$ && $key_blob =~ ^[A-Za-z0-9+/]+=*$ ]] || fail 'invalid OpenSSH public key'
 for cmd in /usr/bin/python3 /usr/bin/docker /usr/bin/systemctl /usr/bin/loginctl /usr/sbin/sshd /usr/sbin/visudo /usr/sbin/runuser /usr/bin/newuidmap /usr/bin/rootlesskit; do [[ -x $cmd ]] || fail "missing prerequisite $cmd"; done
+command -v aa-status >/dev/null && aa-status --enabled || fail 'AppArmor must already be enabled'
+[[ -f /etc/apparmor.d/rootlesskit ]] && aa-status | grep -Fq rootlesskit || fail 'the shared rootlesskit AppArmor profile must already be loaded'
 [[ -d /usr/local/libexec/mes-rootless && ! -L /usr/local/libexec/mes-rootless ]] || fail 'pinned rootless launcher directory unavailable'
 [[ -f /usr/local/libexec/mes-rootless/dockerd-rootless.sh && -f /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh ]] || fail 'pinned rootless launchers unavailable'
 [[ $(stat -c '%u:%g:%a' /usr/local/libexec/mes-rootless) == 0:0:755 ]] || fail 'rootless launcher directory must be immutable root-owned'
