@@ -21,23 +21,27 @@ async function chooseStockedWarehouses(page: Page) {
   const panel = transferRegion(page);
   await expect(panel.locator('select')).toHaveCount(3);
   const warehouseData = await (await page.request.get('/api/stations/erp/data?view=back')).json();
-  const itemId = await panel.locator('select').nth(0).inputValue();
+  const itemSelect = panel.locator('select').nth(0);
+  const itemIds = await itemSelect.locator('option').evaluateAll(options =>
+    options.map(option => (option as HTMLOptionElement).value),
+  );
   const warehouses = warehouseData.data.warehouses as Array<{ id: string }>;
-  const balances = await Promise.all(warehouses.map(async warehouse => {
+  const stockOptions = await Promise.all(itemIds.flatMap(itemId => warehouses.map(async warehouse => {
     const response = await page.request.get(
       `/api/stations/erp/inventory?itemId=${encodeURIComponent(itemId)}&warehouseId=${encodeURIComponent(warehouse.id)}`,
     );
     const result = await response.json();
-    return { id: warehouse.id, available: result.data.available as number };
-  }));
-  const sourceWarehouse = balances.find(warehouse => warehouse.available > 0);
-  const destinationWarehouse = warehouses.find(warehouse => warehouse.id !== sourceWarehouse?.id);
-  expect(sourceWarehouse, 'fixture must provide at least one stocked warehouse').toBeTruthy();
+    return { itemId, warehouseId: warehouse.id, available: result.data.available as number };
+  })));
+  const stock = stockOptions.find(option => option.available > 0);
+  const destinationWarehouse = warehouses.find(warehouse => warehouse.id !== stock?.warehouseId);
+  expect(stock, 'fixture must provide a stocked item in at least one warehouse').toBeTruthy();
   expect(destinationWarehouse, 'fixture must provide a distinct destination warehouse').toBeTruthy();
-  await panel.locator('select').nth(1).selectOption(sourceWarehouse!.id);
+  await itemSelect.selectOption(stock!.itemId);
+  await panel.locator('select').nth(1).selectOption(stock!.warehouseId);
   await panel.locator('select').nth(2).selectOption(destinationWarehouse!.id);
-  await expect(panel.getByText(/Available:/)).toHaveText(`Available: ${sourceWarehouse!.available}`);
-  return { panel, sourceWarehouse: sourceWarehouse!, destinationWarehouse: destinationWarehouse! };
+  await expect(panel.getByText(/Available:/)).toHaveText(`Available: ${stock!.available}`);
+  return { panel, sourceWarehouse: stock!, destinationWarehouse: destinationWarehouse! };
 }
 
 async function receiveStockThroughPurchaseWorkflow(page: Page) {

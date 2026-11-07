@@ -70,7 +70,7 @@ export function StockTransfer({ data, role, onChanged }: StockTransferProps) {
       });
 
     return () => controller.abort();
-  }, [item, from, availabilityRefresh]);
+  }, [data, item, from, availabilityRefresh]);
 
   async function sendTransfer() {
     setBusy(true);
