@@ -8,7 +8,19 @@ const traditionalChinese:Record<string,string> = {
   "Transfer item": "調撥品項",
   "Source warehouse": "來源倉庫",
   "Destination warehouse": "目的倉庫",
-  "Available": "可用庫存",
+  "Loading…": "載入中…",
+  "Transfer quantity": "調撥數量",
+  "Confirm stock transfer": "確認庫存調撥",
+  "Transferring…": "調撥中…",
+  "Transfer complete": "調撥完成",
+  "Source available": "來源剩餘",
+  "Destination balance": "目的庫存",
+  "Retry key retained": "重試識別碼已保留",
+  "Warehouse transfer": "倉庫調撥",
+  "Availability is read from the persisted ledger. Retry the same request after an uncertain result.": "可用庫存直接讀取持久化台帳。若結果不確定，請使用相同請求重試。",
+  "Transfer item": "調撥品項",
+  "Source warehouse": "來源倉庫",
+  "Destination warehouse": "目的倉庫",
   "Loading…": "載入中…",
   "Transfer quantity": "調撥數量",
   "Confirm stock transfer": "確認庫存調撥",
@@ -288,3 +300,4 @@ const traditionalChinese:Record<string,string> = {
   "request_error": "請求錯誤"
 };
 export function tr(text:string):string { return currentLanguage()==='zh-TW'?(traditionalChinese[text]??text):text; }
+
