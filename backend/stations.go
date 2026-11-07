@@ -102,6 +102,14 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		a.inventoryAvailability(w, r, id, g)
 		return
 	}
+	if site == "erp" && action == "purchase-returns" && r.Method == http.MethodPost {
+		a.purchaseReturn(w, r, id, g)
+		return
+	}
+	if site == "erp" && action == "purchase-returns" && r.Method == http.MethodGet {
+		a.purchaseReturnAvailability(w, r, id, g)
+		return
+	}
 	if action == "data" && r.Method == "GET" {
 		front := r.URL.Query().Get("view") == "front"
 		if !front && g.Scope != "back" {
