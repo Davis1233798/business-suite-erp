@@ -92,8 +92,47 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  rootless-host:
+    name: Verify isolated ERP rootless host provisioning
+    needs: erp
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rootless runtime prerequisites on disposable runner
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y dbus-user-session docker-ce-rootless-extras openssh-server uidmap
+          sudo install -d -o root -g root -m 0755 /usr/local/libexec/mes-rootless
+          sudo install -o root -g root -m 0755 /usr/bin/dockerd-rootless.sh /usr/local/libexec/mes-rootless/dockerd-rootless.sh
+          sudo install -o root -g root -m 0755 /usr/bin/dockerd-rootless-setuptool.sh /usr/local/libexec/mes-rootless/dockerd-rootless-setuptool.sh
+          sudo ln -s /usr/bin/docker /usr/local/libexec/mes-rootless/docker
+          test "$(systemctl is-active docker.service)" = active
+      - name: Create an ephemeral fixture key and provision ERP accounts
+        run: |
+          set -euo pipefail
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/erp-fixture-key"
+          sudo bash infra/linux/provision-erp-rootless-host.sh --apply --deploy-public-key-file "$RUNNER_TEMP/erp-fixture-key.pub"
+      - name: Verify ERP host boundaries and exact forced gateway status
+        run: |
+          set -euo pipefail
+          sudo bash infra/linux/provision-erp-rootless-host.sh --check --deploy-public-key-file "$RUNNER_TEMP/erp-fixture-key.pub"
+          sudo bash infra/linux/test-erp-host-isolation.sh
+          sudo systemctl enable --now ssh.service
+          ssh -i "$RUNNER_TEMP/erp-fixture-key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null erp-deploy@127.0.0.1 status | python3 -c '
+          import json, sys
+          assert json.load(sys.stdin) == {"protocol": 1, "ready": True, "runtime_user": "erp-runtime",
+                                         "docker_mode": "rootless", "endpoint": "127.0.0.1:18096"}'
+          test "$(systemctl is-active docker.service)" = active
+      - name: Verify provisioner shell syntax
+        run: bash -n infra/linux/provision-erp-rootless-host.sh infra/linux/test-erp-host-isolation.sh
+
   release:
-    needs: [erp, windows-desktop]
+    needs: [erp, windows-desktop, rootless-host]
     strategy:
       matrix:
         include:
