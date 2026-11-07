@@ -447,6 +447,15 @@ func main() {
 	if file == "" {
 		file = ".data/erp-repository.sqlite"
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--backup" {
+		if len(os.Args) != 3 || os.Args[2] == "" {
+			log.Fatal("Usage: station-server --backup DESTINATION")
+		}
+		if err := backupERPDatabase(file, os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if e := os.MkdirAll(filepath.Dir(file), 0700); e != nil {
 		log.Fatal(e)
 	}

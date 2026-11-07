@@ -1,0 +1,1 @@
+erp-deploy ALL=(erp-runtime) NOPASSWD: /usr/bin/python3 -Es /usr/local/lib/business-suite-erp/erp_gateway.py --runtime
