@@ -74,6 +74,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "No access to this workspace")
 		return
 	}
+	if action == "stock-count" {
+		a.stockCount(w, r, id, g)
+		return
+	}
 	if action == "finance" && r.Method == http.MethodPost {
 		a.billing(w, r, id, g)
 		return
