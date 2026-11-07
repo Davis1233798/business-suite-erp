@@ -49,7 +49,9 @@ jobs:
       - name: Check release workflow build boundary
         run: node --test tests/erp-workflow-contract.test.cjs
       - name: Verify the pinned ERP OCI release contract
-        run: python3 -m unittest discover -s infra/tests -p test_erp_image_release.py
+        run: |
+          python3 -m unittest discover -s infra/tests -p test_erp_image_release.py
+          python3 -m unittest discover -s infra/tests -p test_erp_gateway_protocol.py
       - run: npx tsc --noEmit
       - run: npm test
       - run: go -C backend test -race -timeout=20m ./...
@@ -143,4 +145,60 @@ jobs:
           tag="${GITHUB_SHA}${IMAGE_TAG_SUFFIX}"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker tag erp-ci:${GITHUB_SHA} "$image:$tag"
-          docker push "$image:$tag"
+          docker push "$image:$tag" | tee "$RUNNER_TEMP/erp-publish.log"
+          if [ "$IMAGE_TAG_SUFFIX" = '-arm64' ]; then
+            digest="$(awk '$2 == "digest:" { print $3 }' "$RUNNER_TEMP/erp-publish.log")"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s\n%s\n' "$GITHUB_SHA" "$digest" > "$RUNNER_TEMP/erp-arm64-release.txt"
+          fi
+      - name: Record the ARM64 manifest digest for deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.architecture == 'arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-arm64-release-${{ github.sha }}
+          path: ${{ runner.temp }}/erp-arm64-release.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy isolated ERP to OCI
+    needs: release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ERP_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: erp-production
+      cancel-in-progress: false
+    environment: erp-production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: erp-arm64-release-${{ github.sha }}
+          path: ${{ runner.temp }}/erp-arm64-release
+      - name: Deploy the published ARM64 digest through the ERP gateway
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ERP_DEPLOY_TARGET: ${{ secrets.ERP_DEPLOY_TARGET }}
+          ERP_DEPLOY_KEY: ${{ secrets.ERP_DEPLOY_KEY }}
+          ERP_DEPLOY_HOST_KEY: ${{ secrets.ERP_DEPLOY_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha | grep -Fx "$GITHUB_SHA"
+          mapfile -t release < "$RUNNER_TEMP/erp-arm64-release/erp-arm64-release.txt"
+          [[ "${#release[@]}" -eq 2 && "${release[0]}" == "$GITHUB_SHA" ]]
+          [[ "${release[1]}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$ERP_DEPLOY_TARGET" =~ ^erp-deploy@[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ -n "$ERP_DEPLOY_KEY" && -n "$ERP_DEPLOY_HOST_KEY" ]]
+          umask 077
+          printf '%s\n' "$ERP_DEPLOY_KEY" > "$RUNNER_TEMP/erp-deploy-key"
+          printf '%s\n' "$ERP_DEPLOY_HOST_KEY" > "$RUNNER_TEMP/erp-known-hosts"
+          options=(-i "$RUNNER_TEMP/erp-deploy-key" -o BatchMode=yes -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/erp-known-hosts"
+            -o ConnectTimeout=15)
+          ssh "${options[@]}" "$ERP_DEPLOY_TARGET" status | python3 -c '
+          import json, sys
+          assert json.load(sys.stdin) == {"protocol": 1, "ready": True, "runtime_user": "erp-runtime",
+                                         "docker_mode": "rootless", "endpoint": "127.0.0.1:18096"}'
+          ssh "${options[@]}" "$ERP_DEPLOY_TARGET" "deploy ${release[0]} ${release[1]}"
