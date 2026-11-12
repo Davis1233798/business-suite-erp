@@ -16,3 +16,18 @@ test('server rejection retains entered lines and description',async({page})=>{
  await panel.getByLabel('Debit',{exact:true}).nth(0).fill('1200');await panel.getByLabel('Credit',{exact:true}).nth(0).fill('100');await panel.getByLabel('Credit',{exact:true}).nth(1).fill('1100');await panel.getByRole('button',{name:'Post journal',exact:true}).click();await expect(panel.getByRole('alert')).toBeVisible();await expect(panel.getByLabel('Description')).toHaveValue('Keep rejected draft');await expect(panel.getByLabel('Debit',{exact:true}).nth(0)).toHaveValue('1200');
 });
 test('read-only user has no posting form',async({page})=>{await signIn(page,'viewer@suite.test');await expect(page.getByRole('heading',{name:'Post a journal entry'})).toHaveCount(0)});
+test('operator closes a fiscal period and sees the saved state after reload', async ({page}) => {
+  await signIn(page);
+  const panel = page.locator('section').filter({has: page.getByRole('heading', {name: 'Fiscal periods'})});
+  const period = panel.getByRole('listitem').filter({hasText: '2026-10'});
+  await expect(period).toContainText('Open');
+  await period.getByRole('button', {name: 'Close period', exact: true}).click();
+  await panel.getByRole('button', {name: 'Cancel', exact: true}).click();
+  await expect(period).toContainText('Open');
+  await period.getByRole('button', {name: 'Close period', exact: true}).click();
+  await panel.getByRole('button', {name: 'Confirm close', exact: true}).click();
+  await expect(period).toContainText('Closed');
+  await page.reload();
+  await expect(period).toContainText('Closed');
+  await expect(period.getByRole('button', {name: 'Close period', exact: true})).toHaveCount(0);
+});
