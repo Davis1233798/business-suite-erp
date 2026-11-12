@@ -323,7 +323,14 @@ const traditionalChinese:Record<string,string> = {
   "accepted": "已接受",
   "duplicate": "重複請求",
   "capacity_rejected": "容量不足拒絕",
-  "request_error": "請求錯誤"
+  "request_error": "請求錯誤",
+  "Create purchase order": "建立採購單",
+  "Item": "品項",
+  "PURCHASING": "採購作業",
+  "Purchase order submitted": "採購單已提交",
+  "Select a supplier": "選擇供應商",
+  "Submit purchase order": "提交採購單",
+  "Supplier": "供應商"
 };
 export function tr(text:string):string { return currentLanguage()==='zh-TW'?(traditionalChinese[text]??text):text; }
 

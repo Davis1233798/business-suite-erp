@@ -86,6 +86,10 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		a.sales(w, r, id, g)
 		return
 	}
+	if site == "erp" && action == "purchase-create" {
+		a.erpCreatePurchase(w, r, id, g)
+		return
+	}
 	if action == "purchases" && r.Method == http.MethodPost {
 		a.purchases(w, r, id, g)
 		return
