@@ -411,6 +411,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.HandleFunc("/api/auth/{action}", a.auth)
 	mux.HandleFunc("/api/stations/{site}/traffic", a.trafficAPI)
 	mux.HandleFunc("/api/stations/{site}/{action}", a.stationAPI)
+	mux.HandleFunc("POST /api/stations/{site}/{action}/{period}/close", a.stationAPI)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		fail(w, 501, "This legacy business API has not been migrated to Go")
 	})
