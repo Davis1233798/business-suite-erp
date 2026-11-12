@@ -74,6 +74,14 @@ func (a *App) stationAPI(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "No access to this workspace")
 		return
 	}
+	if site == "erp" && action == "fiscal-periods" {
+		a.fiscalPeriods(w, r, id, g)
+		return
+	}
+	if r.PathValue("period") != "" {
+		fail(w, 404, "Workspace operation not found")
+		return
+	}
 	if action == "stock-count" {
 		a.stockCount(w, r, id, g)
 		return

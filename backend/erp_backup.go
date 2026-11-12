@@ -35,7 +35,11 @@ func backupERPDatabase(source, destination string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	readOnly := url.URL{Scheme: "file", Path: filepath.ToSlash(source), RawQuery: "mode=ro"}
+	uriPath := filepath.ToSlash(source)
+	if len(filepath.VolumeName(source)) == 2 {
+		uriPath = "/" + uriPath
+	}
+	readOnly := url.URL{Scheme: "file", Path: uriPath, RawQuery: "mode=ro"}
 	db, err := sql.Open("sqlite", readOnly.String())
 	if err != nil {
 		return err
