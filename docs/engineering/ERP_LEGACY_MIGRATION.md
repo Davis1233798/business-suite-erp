@@ -25,3 +25,18 @@ During the final transfer, stop legacy ERP writes, capture a final snapshot
 and reconcile again before enabling writes on the new route. Retain the
 original database for rollback and reconcile any writes accepted after
 cutover before routing back.
+
+## Offline command contract
+
+Use a consistent legacy SQLite snapshot and an explicit organization ID.
+Create a new standalone file with the standard ERP initializer. Keep the
+source read-only throughout. Import the selected organization's business
+rows in a transaction, preserving IDs and references. Publish the output
+only after reconciliation succeeds. Reject an existing destination and
+leave it intact. Imported organization access requires an explicit identity
+mapping before cutover.
+
+The standalone initializer reconstructs shipment extended costs when the
+source schema predates that column. The migration must exercise this path
+with a synthetic shipment and compare the reconstructed costs to the
+source stock ledger.
