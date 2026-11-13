@@ -100,7 +100,7 @@ func importLegacyERP(source, destination string, organizations ...string) error 
 				return err
 			}
 			list := strings.Join(columns, ",")
-			query := fmt.Sprintf("INSERT INTO main.%s (%s) SELECT %s FROM legacy.%s WHERE organization_id=?", table, list, list, table)
+			query := fmt.Sprintf("INSERT INTO main.%s (%s) SELECT %s FROM legacy.%s WHERE organization_id=? ORDER BY rowid", table, list, list, table)
 			if table == "erp_fiscal_periods" {
 				continue
 			}
