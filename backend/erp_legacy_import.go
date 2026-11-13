@@ -43,7 +43,13 @@ func importLegacyERP(source, destination string, organizations ...string) error 
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.Exec("CREATE TABLE erp_imported_organizations (organization_id TEXT PRIMARY KEY)"); err != nil {
+		return err
+	}
 	for _, organization := range organizations {
+		if _, err := tx.Exec("INSERT INTO erp_imported_organizations VALUES (?)", organization); err != nil {
+			return err
+		}
 		if strings.TrimSpace(organization) == "" {
 			return fmt.Errorf("organization is required")
 		}

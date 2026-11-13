@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,4 +165,25 @@ func TestLegacyERPImportMultipleOrganizations(t *testing.T) {
 	if err := result.QueryRow("SELECT count(*) FROM organizations WHERE id IN ('a','b')").Scan(&count); err != nil || count != 2 {
 		t.Fatalf("organizations: %d %v", count, err)
 	}
+}
+
+func TestLegacyERPImportBlocksDemoProvisioning(t *testing.T) {
+	a := appForTest(t)
+	space := token()
+	if _, err := a.db.Exec("CREATE TABLE erp_imported_organizations (organization_id TEXT PRIMARY KEY);"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.db.Exec("INSERT INTO erp_imported_organizations VALUES (?)", "org_test_"+space); err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]string{"email": "admin@suite.test", "password": testPassword, "site": repositorySite}
+	w := request(a, "POST", "/api/auth/login", body, &http.Cookie{Name: demoCookie, Value: space})
+	if w.Code == http.StatusOK {
+		t.Fatal("demo login accepted imported workspace")
+	}
+	var count int
+	if err := a.db.QueryRow("SELECT count(*) FROM station_accounts WHERE organization_id=?", "org_test_"+space).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("demo accounts created: %d %v", count, err)
+	}
+	login(t, a, "admin@suite.test", token())
 }
