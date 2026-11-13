@@ -87,3 +87,37 @@ func TestLegacyERPImportRejectsUnbalancedJournal(t *testing.T) {
 		t.Fatalf("unexpected destination: %v", err)
 	}
 }
+
+func TestLegacyERPImportBackfillsShipmentCost(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "legacy.sqlite")
+	target := filepath.Join(dir, "target.sqlite")
+	db, err := openDB(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+        ALTER TABLE erp_shipment_lines DROP COLUMN extended_cost;
+        INSERT INTO organizations(id,name,slug) VALUES ('org','Example','org');
+        INSERT INTO erp_shipment_lines(id,organization_id,shipment_id,item_id,quantity,unit_cost)
+            VALUES ('line','org','shipment','item',3,125);
+    `)
+	if closeErr := db.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := importLegacyERP(source, target, "org"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := openDB(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Close()
+	var cost int
+	if err := result.QueryRow("SELECT extended_cost FROM erp_shipment_lines WHERE id='line'").Scan(&cost); err != nil || cost != 375 {
+		t.Fatalf("shipment cost: got %d, want 375, error %v", cost, err)
+	}
+}
