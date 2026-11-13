@@ -432,6 +432,15 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.ServeHTTP(w, r)
 }
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--import-legacy" {
+		if len(os.Args) != 5 {
+			log.Fatal("Usage: station-server --import-legacy SOURCE DESTINATION ORGANIZATION")
+		}
+		if err := importLegacyERP(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--healthcheck" {
 		client := &http.Client{Timeout: 3 * time.Second}
 		response, err := client.Get("http://127.0.0.1:8095/api/health")
