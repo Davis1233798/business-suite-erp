@@ -49,3 +49,11 @@ must not become accessible through that provisioning path. Before deploying
 imported records, establish an authenticated account-to-organization binding
 and verify that demo sign-in, a missing cookie, and an unrelated account
 cannot access the imported records.
+
+## Invoice opening balances
+
+Keep each invoice's stored total and paid amount and copy its payment
+records separately. In the legacy demo seed, a 1,000 invoice starts
+with 400 paid and no payment row for that opening amount. Reconcile
+the source and imported unpaid balance per invoice. Compare payment
+totals separately and record opening differences before public cutover.
