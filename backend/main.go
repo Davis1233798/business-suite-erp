@@ -433,10 +433,10 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--import-legacy" {
-		if len(os.Args) != 5 {
-			log.Fatal("Usage: station-server --import-legacy SOURCE DESTINATION ORGANIZATION")
+		if len(os.Args) < 5 {
+			log.Fatal("Usage: station-server --import-legacy SOURCE DESTINATION ORGANIZATION [ORGANIZATION...]")
 		}
-		if err := importLegacyERP(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+		if err := importLegacyERP(os.Args[2], os.Args[3], os.Args[4:]...); err != nil {
 			log.Fatal(err)
 		}
 		return

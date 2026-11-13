@@ -28,9 +28,9 @@ cutover before routing back.
 
 ## Offline command contract
 
-Use a consistent legacy SQLite snapshot and an explicit organization ID.
+Use a consistent legacy SQLite snapshot and one or more explicit organization IDs.
 Create a new standalone file with the standard ERP initializer. Keep the
-source read-only throughout. Import the selected organization's business
+source read-only throughout. Import the selected organizations' business
 rows in a transaction, preserving IDs and references. Publish the output
 only after reconciliation succeeds. Reject an existing destination and
 leave it intact. Imported organization access requires an explicit identity

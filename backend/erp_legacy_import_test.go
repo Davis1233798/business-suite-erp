@@ -130,3 +130,38 @@ func TestLegacyERPImportBackfillsShipmentCost(t *testing.T) {
 		t.Fatalf("shipment cost: got %d, want 375, error %v", cost, err)
 	}
 }
+
+func TestLegacyERPImportMultipleOrganizations(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "legacy.sqlite")
+	target := filepath.Join(dir, "target.sqlite")
+	db, err := openDB(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("INSERT INTO organizations(id,name,slug) VALUES ('a','A','a'),('b','B','b')")
+	if closeErr := db.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := importLegacyERP(source, target, "a", "missing"); err == nil {
+		t.Fatal("accepted missing organization")
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("partial import published: %v", err)
+	}
+	if err := importLegacyERP(source, target, "a", "b"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := openDB(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Close()
+	var count int
+	if err := result.QueryRow("SELECT count(*) FROM organizations WHERE id IN ('a','b')").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("organizations: %d %v", count, err)
+	}
+}
