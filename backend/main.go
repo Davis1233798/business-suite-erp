@@ -240,6 +240,19 @@ func (a *App) initializeDemo(space string) error {
 		return errors.New("Invalid demo workspace")
 	}
 	org := "org_test_" + space
+	var importedTable int
+	if err := a.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='erp_imported_organizations'").Scan(&importedTable); err != nil {
+		return err
+	}
+	if importedTable != 0 {
+		var imported int
+		if err := a.db.QueryRow("SELECT count(*) FROM erp_imported_organizations WHERE organization_id=?", org).Scan(&imported); err != nil {
+			return err
+		}
+		if imported != 0 {
+			return fmt.Errorf("demo provisioning unavailable for imported workspace")
+		}
+	}
 	var n int
 	if e := a.db.QueryRow("SELECT count(*) FROM station_accounts WHERE organization_id=?", org).Scan(&n); e != nil {
 		return e
@@ -432,6 +445,15 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.ServeHTTP(w, r)
 }
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--import-legacy" {
+		if len(os.Args) < 5 {
+			log.Fatal("Usage: station-server --import-legacy SOURCE DESTINATION ORGANIZATION [ORGANIZATION...]")
+		}
+		if err := importLegacyERP(os.Args[2], os.Args[3], os.Args[4:]...); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--healthcheck" {
 		client := &http.Client{Timeout: 3 * time.Second}
 		response, err := client.Get("http://127.0.0.1:8095/api/health")
