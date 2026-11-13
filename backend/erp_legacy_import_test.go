@@ -20,6 +20,12 @@ func TestLegacyERPImportScopesOrganizations(t *testing.T) {
         DROP TABLE erp_repository_schema;
         INSERT INTO organizations(id,name,slug) VALUES ('selected','Selected','selected'), ('other','Other','other');
         INSERT INTO erp_warehouses(id,organization_id,name,code) VALUES ('warehouse-a','selected','First','A'), ('warehouse-b','other','Second','B');
+        INSERT INTO erp_invoices(id,organization_id,invoice_number,invoice_type,partner_type,partner_id,total_amount,paid_amount,status)
+            VALUES ('invoice','selected','INV-1','receivable','customer','customer',1000,250,'partial');
+        INSERT INTO erp_payments(id,organization_id,payment_number,invoice_id,amount)
+            VALUES ('payment','selected','PAY-1','invoice',250);
+        INSERT INTO erp_stock_ledger(id,organization_id,item_id,warehouse_id,change_type,quantity_change,balance_after,reference_doc)
+            VALUES ('movement','selected','item','warehouse-a','in',12,12,'receipt');
         INSERT INTO users(id,email,display_name) VALUES ('legacy-user','legacy@example.test','Legacy');
     `); err != nil {
 		db.Close()
@@ -47,6 +53,9 @@ func TestLegacyERPImportScopesOrganizations(t *testing.T) {
 	assertCount("SELECT count(*) FROM erp_warehouses", 1)
 	assertCount("SELECT count(*) FROM organizations", 1)
 	assertCount("SELECT count(*) FROM users", 0)
+	assertCount("SELECT total_amount-paid_amount FROM erp_invoices WHERE id='invoice'", 750)
+	assertCount("SELECT sum(amount) FROM erp_payments WHERE invoice_id='invoice'", 250)
+	assertCount("SELECT sum(quantity_change) FROM erp_stock_ledger WHERE warehouse_id='warehouse-a'", 12)
 	if err := importLegacyERP(source, target, "other"); err == nil {
 		t.Fatal("accepted existing destination")
 	}
