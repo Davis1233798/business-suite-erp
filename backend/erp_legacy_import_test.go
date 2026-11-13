@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +58,32 @@ func TestLegacyERPImportScopesOrganizations(t *testing.T) {
 	var count int
 	if err := legacy.QueryRow("SELECT count(*) FROM erp_warehouses").Scan(&count); err != nil || count != 2 {
 		t.Fatalf("legacy warehouse count: %d %v", count, err)
+	}
+}
+
+func TestLegacyERPImportRejectsUnbalancedJournal(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "legacy.sqlite")
+	target := filepath.Join(dir, "target.sqlite")
+	db, err := openDB(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+        INSERT INTO organizations(id,name,slug) VALUES ('org','Example','org');
+        INSERT INTO erp_journal_entries(id,organization_id,entry_number,entry_date,description,status)
+            VALUES ('journal','org','JE-1','2026-10-01','Example','posted');
+        INSERT INTO erp_journal_lines(id,organization_id,journal_id,account_code,account_name,debit_amount,credit_amount)
+            VALUES ('line','org','journal','1100','Cash',100,0);
+    `)
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := importLegacyERP(source, target, "org"); err == nil || !strings.Contains(err.Error(), "unbalanced") {
+		t.Fatalf("expected reconciliation failure, got %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("unexpected destination: %v", err)
 	}
 }
