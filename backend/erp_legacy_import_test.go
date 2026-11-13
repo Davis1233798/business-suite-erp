@@ -26,7 +26,7 @@ func TestLegacyERPImportScopesOrganizations(t *testing.T) {
         INSERT INTO erp_payments(id,organization_id,payment_number,invoice_id,amount)
             VALUES ('payment','selected','PAY-1','invoice',250);
         INSERT INTO erp_stock_ledger(id,organization_id,item_id,warehouse_id,change_type,quantity_change,balance_after,reference_doc)
-            VALUES ('movement','selected','item','warehouse-a','in',12,12,'receipt');
+            VALUES ('movement','selected','item','warehouse-a','in',12,12,'receipt'), ('earlier-sort-key','selected','item','warehouse-a','out',-5,7,'shipment');
         INSERT INTO users(id,email,display_name) VALUES ('legacy-user','legacy@example.test','Legacy');
     `); err != nil {
 		db.Close()
@@ -56,7 +56,7 @@ func TestLegacyERPImportScopesOrganizations(t *testing.T) {
 	assertCount("SELECT count(*) FROM users", 0)
 	assertCount("SELECT total_amount-paid_amount FROM erp_invoices WHERE id='invoice'", 750)
 	assertCount("SELECT sum(amount) FROM erp_payments WHERE invoice_id='invoice'", 250)
-	assertCount("SELECT sum(quantity_change) FROM erp_stock_ledger WHERE warehouse_id='warehouse-a'", 12)
+	assertCount("SELECT sum(quantity_change) FROM erp_stock_ledger WHERE warehouse_id='warehouse-a'", 7)
 	if err := importLegacyERP(source, target, "other"); err == nil {
 		t.Fatal("accepted existing destination")
 	}
