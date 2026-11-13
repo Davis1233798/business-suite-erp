@@ -49,3 +49,19 @@ must not become accessible through that provisioning path. Before deploying
 imported records, establish an authenticated account-to-organization binding
 and verify that demo sign-in, a missing cookie, and an unrelated account
 cannot access the imported records.
+
+## Invoice opening balances
+
+Keep each invoice's stored total and paid amount and copy its payment
+records separately. In the legacy demo seed, a 1,000 invoice starts
+with 400 paid and no payment row for that opening amount. Reconcile
+the source and imported unpaid balance per invoice. Compare payment
+totals separately and record opening differences before public cutover.
+
+## OCI rehearsal evidence
+
+Release a780f5d imported an isolated snapshot for all 1,602 legacy ERP
+organizations. A row-by-row comparison of the source columns matched
+28,855 rows across 19 business tables, including the single recorded
+payment. The rehearsal output was temporary. Account-to-organization
+binding and the final write freeze remain part of cutover acceptance.
