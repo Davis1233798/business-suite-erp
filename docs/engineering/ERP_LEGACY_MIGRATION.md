@@ -40,3 +40,12 @@ The standalone initializer reconstructs shipment extended costs when the
 source schema predates that column. The migration must exercise this path
 with a synthetic shipment and compare the reconstructed costs to the
 source stock ledger.
+
+## Access after import
+
+The current demo login derives a workspace from the browser's demo cookie
+and provisions demo accounts with shared credentials. An imported workspace
+must not become accessible through that provisioning path. Before deploying
+imported records, establish an authenticated account-to-organization binding
+and verify that demo sign-in, a missing cookie, and an unrelated account
+cannot access the imported records.
