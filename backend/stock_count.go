@@ -18,6 +18,8 @@ type countInput struct {
 	Counted     *int64 `json:"countedQuantity"`
 	Reason      string `json:"reason"`
 	Key         string `json:"idempotencyKey"`
+	Date        string `json:"date"`
+	CountDate   string `json:"countDate"`
 }
 
 type countSnapshot struct {
@@ -126,6 +128,13 @@ func (a *App) recordStockCount(ctx context.Context, id *Identity, grant *Grant, 
 		return json.RawMessage(response), nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	effectiveDate := in.Date
+	if effectiveDate == "" {
+		effectiveDate = in.CountDate
+	}
+	if err := checkFiscalPeriodClosed(ctx, tx, org, effectiveDate); err != nil {
 		return nil, err
 	}
 	current, err := readCountSnapshot(ctx, tx, org, in.ItemID, in.WarehouseID)

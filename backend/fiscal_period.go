@@ -13,7 +13,13 @@ func (a *App) fiscalPeriods(w http.ResponseWriter, r *http.Request, id *Identity
 			return
 		}
 		for _, period := range periods {
-			period["isClosed"] = period["isClosed"] == int64(1) || period["isClosed"] == true
+			closed := period["isClosed"] == int64(1) || period["isClosed"] == true
+			period["isClosed"] = closed
+			if closed {
+				period["status"] = "closed"
+			} else {
+				period["status"] = "open"
+			}
 		}
 		ok(w, periods)
 		return
@@ -23,8 +29,8 @@ func (a *App) fiscalPeriods(w http.ResponseWriter, r *http.Request, id *Identity
 		fail(w, 405, "Method not allowed")
 		return
 	}
-	if g.Scope != "back" || (g.Role != "admin" && g.Role != "operator") {
-		fail(w, 403, "Back-office posting permission required")
+	if g.Scope != "back" || g.Role != "admin" {
+		fail(w, 403, "Administrator permission required to close fiscal periods")
 		return
 	}
 	ctx := r.Context()
@@ -61,9 +67,10 @@ func (a *App) fiscalPeriods(w http.ResponseWriter, r *http.Request, id *Identity
 			return
 		}
 	}
+	_, _ = tx.ExecContext(ctx, "UPDATE erp_fiscal_periods SET status='closed' WHERE organization_id=? AND id=?", org, period)
 	if err := tx.Commit(); err != nil {
 		fail(w, 500, "Unable to commit fiscal period close")
 		return
 	}
-	ok(w, map[string]any{"id": period, "isClosed": true})
+	ok(w, map[string]any{"id": period, "isClosed": true, "status": "closed"})
 }
