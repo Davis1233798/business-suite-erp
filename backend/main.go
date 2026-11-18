@@ -146,6 +146,12 @@ func openDB(file string) (*sql.DB, error) {
 	if e = migrateShipmentCost(tx); e != nil {
 		return nil, e
 	}
+	var fpStatusCol int
+	_ = tx.QueryRow("SELECT count(*) FROM pragma_table_info('erp_fiscal_periods') WHERE name='status'").Scan(&fpStatusCol)
+	if fpStatusCol == 0 {
+		_, _ = tx.Exec("ALTER TABLE erp_fiscal_periods ADD COLUMN status TEXT DEFAULT 'open'")
+		_, _ = tx.Exec("UPDATE erp_fiscal_periods SET status=CASE WHEN is_closed=1 THEN 'closed' ELSE 'open' END")
+	}
 	if e = tx.Commit(); e != nil {
 		return nil, e
 	}

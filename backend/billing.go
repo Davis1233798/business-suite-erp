@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,9 @@ type billingInput struct {
 	InvoiceKind string `json:"invoiceKind"`
 	OrderID     string `json:"orderId"`
 	DueDate     string `json:"dueDate"`
+	Date        string `json:"date"`
+	InvoiceDate string `json:"invoiceDate"`
+	PaymentDate string `json:"paymentDate"`
 	InvoiceID   string `json:"invoiceId"`
 	Amount      int64  `json:"amount"`
 	Method      string `json:"method"`
@@ -82,9 +86,9 @@ func (a *App) billing(w http.ResponseWriter, r *http.Request, id *Identity, gran
 	}
 	var result map[string]any
 	if input.Action == "invoice" {
-		result, err = createBillingInvoice(tx, id, input)
+		result, err = createBillingInvoice(r.Context(), tx, id, input)
 	} else {
-		result, err = postBillingPayment(tx, id, input)
+		result, err = postBillingPayment(r.Context(), tx, id, input)
 	}
 	if err != nil {
 		var denied *purchaseError
@@ -115,7 +119,17 @@ func (a *App) billing(w http.ResponseWriter, r *http.Request, id *Identity, gran
 	ok(w, result)
 }
 
-func createBillingInvoice(tx *sql.Tx, id *Identity, input billingInput) (map[string]any, error) {
+func createBillingInvoice(ctx context.Context, tx *sql.Tx, id *Identity, input billingInput) (map[string]any, error) {
+	effectiveDate := input.InvoiceDate
+	if effectiveDate == "" {
+		effectiveDate = input.Date
+	}
+	if effectiveDate == "" {
+		effectiveDate = input.DueDate
+	}
+	if err := checkFiscalPeriodClosed(ctx, tx, id.OrganizationID, effectiveDate); err != nil {
+		return nil, err
+	}
 	orderTable, lineTable, parent, numberColumn, partnerColumn, completeColumn, requiredStatus, partnerTable, prefix, partnerType :=
 		"erp_purchase_orders", "erp_purchase_order_lines", "po_id", "po_number", "supplier_id", "received_quantity", "received", "erp_suppliers", "AP-", "supplier"
 	if input.InvoiceKind == "receivable" {
@@ -193,7 +207,14 @@ func createBillingInvoice(tx *sql.Tx, id *Identity, input billingInput) (map[str
 	return map[string]any{"invoiceId": entity, "invoiceNumber": invoiceNumber, "totalAmount": total}, nil
 }
 
-func postBillingPayment(tx *sql.Tx, id *Identity, input billingInput) (map[string]any, error) {
+func postBillingPayment(ctx context.Context, tx *sql.Tx, id *Identity, input billingInput) (map[string]any, error) {
+	effectiveDate := input.PaymentDate
+	if effectiveDate == "" {
+		effectiveDate = input.Date
+	}
+	if err := checkFiscalPeriodClosed(ctx, tx, id.OrganizationID, effectiveDate); err != nil {
+		return nil, err
+	}
 	var total, paid int64
 	var status string
 	err := tx.QueryRow("SELECT total_amount,paid_amount,status FROM erp_invoices WHERE organization_id=? AND id=?", id.OrganizationID, input.InvoiceID).Scan(&total, &paid, &status)

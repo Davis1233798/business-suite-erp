@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"strings"
-	"time"
 )
 
 type journalLine struct {
@@ -27,11 +26,15 @@ func (a *App) postJournal(w http.ResponseWriter, r *http.Request, id *Identity, 
 		fail(w, 400, "Invalid journal input")
 		return
 	}
-	date, e := time.Parse("2006-01-02", input.EntryDate)
+	dates, e := parseAccountingDates(input.EntryDate)
 	input.Description = strings.TrimSpace(input.Description)
-	if e != nil || date.Format("2006-01-02") != input.EntryDate || input.Description == "" || len(input.Description) > 500 || len(input.Lines) < 2 || len(input.Lines) > 100 {
+	if e != nil || input.Description == "" || len(input.Description) > 500 || len(input.Lines) < 2 || len(input.Lines) > 100 {
 		fail(w, 400, "Provide a valid date, description and 2-100 lines")
 		return
+	}
+	entryDate := dates[0]
+	if len(input.EntryDate) == 10 {
+		entryDate = input.EntryDate
 	}
 	var debit, credit int64
 	for i := range input.Lines {
@@ -55,19 +58,13 @@ func (a *App) postJournal(w http.ResponseWriter, r *http.Request, id *Identity, 
 		return
 	}
 	defer tx.Rollback()
-	var closed int
-	e = tx.QueryRowContext(r.Context(), "SELECT count(*) FROM erp_fiscal_periods WHERE organization_id=? AND is_closed=1 AND start_date<=? AND end_date>=?", id.OrganizationID, input.EntryDate, input.EntryDate).Scan(&closed)
-	if e != nil {
-		fail(w, 500, "Unable to verify fiscal period")
-		return
-	}
-	if closed > 0 {
+	if err := checkFiscalPeriodClosed(r.Context(), tx, id.OrganizationID, input.EntryDate); err != nil {
 		fail(w, 409, "Fiscal period is closed")
 		return
 	}
 	entryID := "je_" + token()
 	number := "JE-" + token()
-	_, e = tx.ExecContext(r.Context(), "INSERT INTO erp_journal_entries(id,organization_id,entry_number,entry_date,description,status) VALUES(?,?,?,?,?,'posted')", entryID, id.OrganizationID, number, input.EntryDate, input.Description)
+	_, e = tx.ExecContext(r.Context(), "INSERT INTO erp_journal_entries(id,organization_id,entry_number,entry_date,description,status) VALUES(?,?,?,?,?,'posted')", entryID, id.OrganizationID, number, entryDate, input.Description)
 	if e != nil {
 		fail(w, 500, "Unable to post journal")
 		return

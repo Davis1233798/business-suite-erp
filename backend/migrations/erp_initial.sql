@@ -30,6 +30,7 @@ CREATE TABLE `erp_fiscal_periods` (
 	`start_date` text NOT NULL,
 	`end_date` text NOT NULL,
 	`is_closed` integer DEFAULT false NOT NULL,
+	`status` text DEFAULT 'open' NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint

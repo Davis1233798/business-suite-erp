@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 )
 
 type transferInput struct {
@@ -14,6 +15,7 @@ type transferInput struct {
 	ToWarehouseID   string `json:"toWarehouseId"`
 	Quantity        int64  `json:"quantity"`
 	RequestID       string `json:"requestId"`
+	Date            string `json:"date"`
 }
 
 func transferPermission(w http.ResponseWriter, g *Grant) bool {
@@ -114,6 +116,10 @@ func (a *App) transferInventory(w http.ResponseWriter, r *http.Request, id *Iden
 		return
 	}
 	org := id.OrganizationID
+	if err := checkFiscalPeriodClosed(r.Context(), tx, org, in.Date); err != nil {
+		fail(w, 409, "Fiscal period is closed")
+		return
+	}
 	var active int
 	if err = tx.QueryRow("SELECT count(*) FROM erp_items WHERE id=? AND organization_id=? AND is_active=1", in.ItemID, org).Scan(&active); err != nil {
 		fail(w, 503, "Unable to validate transfer item")
@@ -177,10 +183,18 @@ func (a *App) transferInventory(w http.ResponseWriter, r *http.Request, id *Iden
 	unit := roundedCost(movedCost, in.Quantity)
 	ref := "TR-" + token()
 	if _, err = tx.Exec("INSERT INTO erp_stock_ledger(id,organization_id,item_id,warehouse_id,change_type,quantity_change,balance_after,unit_cost,total_value,reference_doc) VALUES(?,?,?,?,'transfer_out',?,?,?,?,?)", token(), org, in.ItemID, in.FromWarehouseID, -in.Quantity, source-in.Quantity, unit, -movedCost, ref); err != nil {
+		if strings.Contains(err.Error(), "Stock changed concurrently") || strings.Contains(err.Error(), "Insufficient stock") {
+			fail(w, 409, "Source warehouse stock is insufficient or changed concurrently")
+			return
+		}
 		fail(w, 503, "Transfer failed; no changes were saved")
 		return
 	}
 	if _, err = tx.Exec("INSERT INTO erp_stock_ledger(id,organization_id,item_id,warehouse_id,change_type,quantity_change,balance_after,unit_cost,total_value,reference_doc) VALUES(?,?,?,?,'transfer_in',?,?,?,?,?)", token(), org, in.ItemID, in.ToWarehouseID, in.Quantity, dest+in.Quantity, unit, movedCost, ref); err != nil {
+		if strings.Contains(err.Error(), "Stock changed concurrently") {
+			fail(w, 409, "Destination warehouse stock changed concurrently")
+			return
+		}
 		fail(w, 503, "Transfer failed; no changes were saved")
 		return
 	}
