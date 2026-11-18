@@ -29,8 +29,8 @@ func (a *App) fiscalPeriods(w http.ResponseWriter, r *http.Request, id *Identity
 		fail(w, 405, "Method not allowed")
 		return
 	}
-	if g.Scope != "back" || g.Role != "admin" {
-		fail(w, 403, "Administrator permission required to close fiscal periods")
+	if g.Scope != "back" || (g.Role != "admin" && g.Role != "operator") {
+		fail(w, 403, "Back-office posting permission required")
 		return
 	}
 	ctx := r.Context()

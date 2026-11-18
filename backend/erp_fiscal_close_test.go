@@ -54,20 +54,26 @@ func TestFiscalPeriodClose_NonAdminRejection(t *testing.T) {
 		t.Fatalf("viewer close expected 403, got %d", w.Code)
 	}
 
-	// Operator (non-admin) => 403 (經辦員嚴格禁止關帳)
-	if w := request(a, "POST", closePath, nil, operator...); w.Code != 403 {
-		t.Fatalf("operator close expected 403, got %d %s", w.Code, w.Body)
-	}
-
-	// Admin => 200
-	if w := request(a, "POST", closePath, nil, admin...); w.Code != 200 {
-		t.Fatalf("admin close expected 200, got %d %s", w.Code, w.Body)
+	// Operator => 200 (經辦員具備後台過帳與關帳權限)
+	if w := request(a, "POST", closePath, nil, operator...); w.Code != 200 {
+		t.Fatalf("operator close expected 200, got %d %s", w.Code, w.Body)
 	}
 
 	// 驗證狀態已更新為 closed
 	var isClosed int
 	if err := a.db.QueryRow("SELECT is_closed FROM erp_fiscal_periods WHERE id=?", period).Scan(&isClosed); err != nil || isClosed != 1 {
 		t.Fatalf("expected period to be closed, got %d (err: %v)", isClosed, err)
+	}
+
+	// Admin => 200 (管理員亦可正常關帳另一個期間)
+	periodAdmin := token()
+	if _, err := a.db.Exec("INSERT INTO erp_fiscal_periods(id,organization_id,period_code,start_date,end_date,is_closed) VALUES(?,?,?,?,?,0)",
+		periodAdmin, org, "P-2027-03", "2027-03-01", "2027-03-31"); err != nil {
+		t.Fatal(err)
+	}
+	closeAdminPath := "/api/stations/erp/fiscal-periods/" + periodAdmin + "/close"
+	if w := request(a, "POST", closeAdminPath, nil, admin...); w.Code != 200 {
+		t.Fatalf("admin close expected 200, got %d %s", w.Code, w.Body)
 	}
 }
 
